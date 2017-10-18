@@ -1,0 +1,57 @@
+- hosts: all
+  become: true
+  vars_files:
+    - vars/caserver.yml
+  handlers:
+    - name: restart accord
+      service: name=accord state=restarted
+  tasks:
+    - set_fact: day="{{lookup('pipe','date +%Y-%m-%d')}}" owner=accord group=accord
+    - name: Create directory structure for releaase {{ day }}
+      file:
+        path: /srv/accord-{{ day }}/bin
+        owner: accord
+        group: accord
+        state: directory
+    - name: Create certs cache directory
+      file:
+        path: /srv/cache
+        owner: accord
+        group: accord
+        state: directory
+    - name: Upload the binary
+      copy:
+        src: files/accord
+        owner: accord
+        group: accord
+        mode: "u+x"
+        dest: /srv/accord-{{ day }}/bin/accord
+    - name: Create certs directory
+      file:
+        path: /srv/certs
+        owner: accord
+        group: accord
+        state: directory
+    - name: Upload the ssh certs
+      copy:
+        src: files/certs
+        owner: accord
+        group: accord
+        mode: 0600
+        dest: /srv/accord-{{ day }}
+    - name: Apply permissions to acquire service ports
+      command: /sbin/setcap "cap_net_bind_service=ep" /srv/accord-{{ day }}/bin/accord
+      register: accord
+    - name: symlink release {{ day }}
+      file:
+        src: /srv/accord-{{ day }}
+        dest: /srv/accord
+        state: link
+    - name: Update/Restart the service
+      template:
+        src: templates/accord.service.j2
+        dest: /etc/systemd/system/accord.service
+        owner: root
+        group: root
+        backup: yes
+      notify: restart accord

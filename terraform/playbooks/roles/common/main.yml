@@ -1,0 +1,47 @@
+# Based on/inspired by
+- hosts: all
+  become: true
+  vars:
+    debian_required_packages:
+      - ufw
+      - fail2ban
+      - unattended-upgrades
+      - logwatch
+      - sysstat
+
+    ssh_port: 22
+
+
+  handlers:
+    - name: Restart ssh
+      service: name=ssh state=restarted
+
+  tasks:
+    - name: Update the repos and upgrade installed
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+        upgrade: safe
+
+    - name: Setup Unattended Upgrades, APT cleanups
+      copy: src=files/apt_periodic dest=/etc/apt/apt.conf.d/10periodic
+
+    # Install some required packages
+    - name: Install Required Packages
+      apt: state=installed name={{ item }}
+      with_items:
+        - "{{ debian_required_packages }}"
+
+
+    - name: Disallow password authentication
+      lineinfile: dest=/etc/ssh/sshd_config
+              regexp="^PasswordAuthentication"
+              line="PasswordAuthentication no"
+              state=present
+      notify: Restart ssh
+    - name: Disallow root SSH access
+      lineinfile: dest=/etc/ssh/sshd_config
+              regexp="^PermitRootLogin"
+              line="PermitRootLogin no"
+              state=present
+      notify: Restart ssh

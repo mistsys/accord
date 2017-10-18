@@ -1,0 +1,11 @@
+[Unit]
+Description=accord
+
+[Service]
+User={{owner}}
+Group={{group}}
+ExecStart=/srv/accord/bin/accord -autocert.cache /srv/cache -role-arn={{role_arn}} -params-prefix={{params_prefix}} -path.certs /srv/accord/certs -hostname={{hostname}}
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target

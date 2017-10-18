@@ -1,0 +1,20 @@
+- hosts: all
+  become: true
+  vars:
+    required_packages:
+      - libcap2-bin
+
+  roles:
+    - common
+  tasks:
+    - name: Create accord user
+      user:
+        name: accord
+        system: yes
+        createhome: no
+        uid: 10000
+
+    - name: Install Required Packages
+      apt: state=installed name={{ item }}
+      with_items:
+        - "{{ required_packages }}"
