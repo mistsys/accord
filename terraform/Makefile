@@ -4,6 +4,8 @@ packer ?= packer
 ansible-playbook ?= ansible-playbook
 TOP ?= .
 server_type ?= caserver
+# This should be filled in from the caller
+TERRAFORM_VARS ?= ""
 
 # Get your external IP to ssh into the servers
 .myip:

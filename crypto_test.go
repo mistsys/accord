@@ -32,6 +32,9 @@ func TestAESGCMEndToEnd(t *testing.T) {
 	aesgcm := InitAESGCM(pskStore)
 	message := make([]byte, 100)
 	_, err := io.ReadFull(rand.Reader, message[:])
+	if err != nil {
+		t.Errorf("Failed to read from random: %s", err)
+	}
 
 	encrypted, err := aesgcm.Encrypt(message, 1)
 	if err != nil {

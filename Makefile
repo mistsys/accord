@@ -3,7 +3,7 @@ GO_LD_X = -X $(1)=$(2)
 GO_LDFLAGS += $(if $(GOOGLE_CLIENT_ID), $(call GO_LD_X,github.com/mistsys/accord.ClientID,'$(GOOGLE_CLIENT_ID)'))
 GO_LDFLAGS += $(if $(GOOGLE_CLIENT_SECRET), $(call GO_LD_X,github.com/mistsys/accord.ClientSecret,'$(GOOGLE_CLIENT_SECRET)'))
 set_vars += $(if $(GO_LDFLAGS), -ldflags="$(GO_LDFLAGS)")
-
+TOP ?= .
 
 install:
 	$(go) install $(set_vars) ./...

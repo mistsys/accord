@@ -141,7 +141,7 @@ func main() {
 		}
 	}
 
-	certAccorder := certserver.NewCertAccorder(pskStore, certManager, *oauthDomain, authz)
+	certAccorder := certserver.NewAccordServer(pskStore, certManager, *oauthDomain, authz)
 
 	server := grpc.NewServer()
 	protocol.RegisterCertServer(server, certAccorder)

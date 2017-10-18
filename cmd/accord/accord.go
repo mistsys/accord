@@ -25,21 +25,6 @@ This tool is quite sufficient if you like the idea of running your own pure Go S
 or need to wrap it into another tool or language that does the same thing
 */
 
-func parsePubKey(pubKeyPath string) {
-	contents, err := ioutil.ReadFile(pubKeyPath)
-	if err != nil {
-		log.Fatalf("Failed to read file %s. %s", pubKeyPath, err)
-	}
-
-	_, comment, options, rest, err := ssh.ParseAuthorizedKey(contents)
-	if err != nil {
-		log.Fatalf("Failed to parse cert key: %s. %s", string(contents), err)
-	}
-
-	fmt.Printf("Parsed: %s\n", pubKeyPath)
-	fmt.Println(comment, options, string(rest))
-}
-
 func MarshalCert(cert *ssh.Certificate, comment string) []byte {
 	b := &bytes.Buffer{}
 	b.WriteString(cert.Type())
@@ -147,7 +132,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to sign the cert. %s", err)
 		}
-		fmt.Printf(string(MarshalCert(cert, comment)))
+		fmt.Println(string(MarshalCert(cert, comment)))
 
 	// this is test code to see if go can generate valid rsa cert key
 	// it should be equivalent to
@@ -274,13 +259,16 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to sign the cert. %s", err)
 		}
-		fmt.Printf(string(MarshalCert(cert, comment)))
+		fmt.Println(string(MarshalCert(cert, comment)))
 	case "printcert":
 		contents, err := ioutil.ReadFile(*pubCertPath)
 		if err != nil {
 			log.Fatalf("Failed to read file %s. %s", *pubCertPath, err)
 		}
 		key, _, _, _, err := ssh.ParseAuthorizedKey(contents)
+		if err != nil {
+			log.Fatalf("Failed to parse the public cert %s", *pubCertPath)
+		}
 		cert, ok := key.(*ssh.Certificate)
 		if !ok {
 			log.Fatalf("got %v (%T), wanted a certificate")

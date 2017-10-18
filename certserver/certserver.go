@@ -14,7 +14,7 @@ import (
 )
 
 // I ran out of names to give
-type CertAccorder struct {
+type AccordServer struct {
 	pskStore    accord.PSKStore
 	certManager *accord.CertManager
 	aesgcm      *accord.AESGCM
@@ -22,8 +22,8 @@ type CertAccorder struct {
 	authz       accord.Authz
 }
 
-func NewCertAccorder(pskStore accord.PSKStore, certManager *accord.CertManager, domain string, authz accord.Authz) *CertAccorder {
-	return &CertAccorder{
+func NewAccordServer(pskStore accord.PSKStore, certManager *accord.CertManager, domain string, authz accord.Authz) *AccordServer {
+	return &AccordServer{
 		pskStore:    pskStore,
 		certManager: certManager,
 		aesgcm:      accord.InitAESGCM(pskStore),
@@ -47,7 +47,7 @@ func makeUUID() []byte {
 	return []byte(fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:]))
 }
 
-func (s *CertAccorder) HostAuth(ctx context.Context, authRequest *protocol.HostAuthRequest) (*protocol.HostAuthResponse, error) {
+func (s *AccordServer) HostAuth(ctx context.Context, authRequest *protocol.HostAuthRequest) (*protocol.HostAuthResponse, error) {
 	log.Println("Received host auth request")
 
 	decrypted, err := s.aesgcm.Decrypt(authRequest.AuthInfo)
@@ -64,7 +64,7 @@ func (s *CertAccorder) HostAuth(ctx context.Context, authRequest *protocol.HostA
 	}, nil
 }
 
-func (s *CertAccorder) HostCert(ctx context.Context, certRequest *protocol.HostCertRequest) (*protocol.HostCertResponse, error) {
+func (s *AccordServer) HostCert(ctx context.Context, certRequest *protocol.HostCertRequest) (*protocol.HostCertResponse, error) {
 	// TODO: validate the host ID properly
 	validFrom, _ := ptypes.Timestamp(certRequest.ValidFrom)
 	validUntil, _ := ptypes.Timestamp(certRequest.ValidUntil)
@@ -88,7 +88,7 @@ func (s *CertAccorder) HostCert(ctx context.Context, certRequest *protocol.HostC
 	}, nil
 }
 
-func (s *CertAccorder) UserAuth(ctx context.Context, userAuthRequest *protocol.UserAuthRequest) (*protocol.UserAuthResponse, error) {
+func (s *AccordServer) UserAuth(ctx context.Context, userAuthRequest *protocol.UserAuthRequest) (*protocol.UserAuthResponse, error) {
 	oauthToken, err := accord.OAuth2Token(userAuthRequest.Token)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Cannot convert pb token to *oauth2.Token")
@@ -108,7 +108,7 @@ func (s *CertAccorder) UserAuth(ctx context.Context, userAuthRequest *protocol.U
 	}, nil
 }
 
-func (s *CertAccorder) UserCert(ctx context.Context, certRequest *protocol.UserCertRequest) (*protocol.UserCertResponse, error) {
+func (s *AccordServer) UserCert(ctx context.Context, certRequest *protocol.UserCertRequest) (*protocol.UserCertResponse, error) {
 
 	validFrom, _ := ptypes.Timestamp(certRequest.ValidFrom)
 	validUntil, _ := ptypes.Timestamp(certRequest.ValidUntil)
@@ -139,11 +139,11 @@ func (s *CertAccorder) UserCert(ctx context.Context, certRequest *protocol.UserC
 	}, nil
 }
 
-func (s *CertAccorder) PublicTrustedCA(context.Context, *protocol.PublicTrustedCARequest) (*protocol.PublicTrustedCAResponse, error) {
+func (s *AccordServer) PublicTrustedCA(context.Context, *protocol.PublicTrustedCARequest) (*protocol.PublicTrustedCAResponse, error) {
 	panic("not implemented")
 }
 
-func (s *CertAccorder) Ping(ctx context.Context, req *protocol.PingRequest) (*protocol.PingResponse, error) {
+func (s *AccordServer) Ping(ctx context.Context, req *protocol.PingRequest) (*protocol.PingResponse, error) {
 	return &protocol.PingResponse{
 		Metadata: replyMetadata(req.GetRequestTime()),
 		Message:  "Hello " + req.GetName(),

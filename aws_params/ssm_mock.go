@@ -773,7 +773,7 @@ func (c *MockedSSMAPI) GetParameterHistoryPagesWithContext(aws.Context, *ssm.Get
 
 func (c *MockedSSMAPI) GetParameters(i *ssm.GetParametersInput) (*ssm.GetParametersOutput, error) {
 	params := []*ssm.Parameter{}
-	if *i.WithDecryption == true {
+	if *i.WithDecryption {
 		for _, n := range i.Names {
 			param, ok := c.mSecureStrings[*n]
 			if !ok {
