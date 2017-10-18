@@ -8,6 +8,15 @@ set_vars += $(if $(GO_LDFLAGS), -ldflags="$(GO_LDFLAGS)")
 install:
 	$(go) install $(set_vars) ./...
 
+_builds:
+	mkdir -p _builds/{linx,osx}
+
+build-osx: _builds
+	GOOS=darwin $(go) build $(set_vars) -o _builds/osx/accord_client ./cmd/accord_client
+
+build-linux: _builds
+	GOOS=linux $(go) build $(set_vars) -o _builds/linux/accord_client ./cmd/accord_client
+
 # clean
 clean :
 	-$(go) clean -i ./...
