@@ -112,17 +112,20 @@ message UserAuthResponse {
     ReplyMetadata metadata=1;
     string username=2;
 
-    bool valid=3;
-    bytes authResponse=4;
+    string userId = 3;
+    bool valid=4;
+    // something cryptographic -- haven't implemented yet
+    bytes authResponse=5;
 }
 
 message UserCertRequest {
     google.protobuf.Timestamp requestTime = 1;
-    string username=2;
+    string userId=2;
+    string username=3;
     // this should go in ID of the cert
-    string remoteUsername=3;
+    string remoteUsername=4;
     // the raw public key to sign with user cert
-    bytes publicKey=4;
+    bytes publicKey=5;
     // this is a hack to just respond back with the
     // new principals added to the current cert
     // also it's useful to log before/after for audit
@@ -130,13 +133,13 @@ message UserCertRequest {
     // and discarded...
     // this will be disabled with a future version
     // once the server has a database
-    bytes currentUserCert=5;
+    bytes currentUserCert=6;
 
-    google.protobuf.Timestamp validFrom = 6;
-    google.protobuf.Timestamp validUntil = 7;
-    repeated string authorizedPrincipals= 8;
+    google.protobuf.Timestamp validFrom = 7;
+    google.protobuf.Timestamp validUntil = 8;
+    repeated string authorizedPrincipals= 9;
     // this should be used for scripts to limit access
-    repeated string forceCommands = 9;
+    repeated string forceCommands = 10;
 }
 
 

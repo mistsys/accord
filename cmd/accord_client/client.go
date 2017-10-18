@@ -180,13 +180,13 @@ type User struct {
 // Maybe use a nonce or something, but I can't think of
 // reasonable things to send here, so boolean so that
 // the backend doesn't get bad requests
-func (u *User) CheckAuthorization(ctx context.Context) (bool, error) {
+func (u *User) CheckAuthorization(ctx context.Context) (bool, string, error) {
 	if u.token == nil {
-		return false, errors.New("Token isn't set, authenticate first with an OAuth2.0 service")
+		return false, "", errors.New("Token isn't set, authenticate first with an OAuth2.0 service")
 	}
 	pbToken, err := accord.OAuthTokenPb(u.token)
 	if err != nil {
-		return false, errors.Wrapf(err, "Failed to convert *oauth2.Token to protobuf equivalent")
+		return false, "", errors.Wrapf(err, "Failed to convert *oauth2.Token to protobuf equivalent")
 	}
 	authRequest := &protocol.UserAuthRequest{
 		RequestTime: ptypes.TimestampNow(),
@@ -195,12 +195,12 @@ func (u *User) CheckAuthorization(ctx context.Context) (bool, error) {
 	}
 	resp, err := u.c.UserAuth(ctx, authRequest)
 	if err != nil {
-		return false, errors.Wrapf(err, "Failed to authenticate user with server")
+		return false, "", errors.Wrapf(err, "Failed to authenticate user with server")
 	}
-	return resp.GetValid(), nil
+	return resp.GetValid(), resp.GetUserId(), nil
 }
 
-func (u *User) RequestCerts(ctx context.Context, duration time.Duration) error {
+func (u *User) RequestCerts(ctx context.Context, userId string, duration time.Duration) error {
 	if len(u.principals) == 0 {
 		return errors.New("No principals provided to request certificates for")
 	}
@@ -255,6 +255,7 @@ func (u *User) RequestCerts(ctx context.Context, duration time.Duration) error {
 
 		certRequest := &protocol.UserCertRequest{
 			RequestTime:          ptypes.TimestampNow(),
+			UserId:               userId,
 			Username:             u.username,
 			RemoteUsername:       u.remoteUsername,
 			CurrentUserCert:      currentCert,
@@ -420,7 +421,7 @@ func main() {
 			token:          tok,
 			principals:     principals.Value(),
 		}
-		ok, err := user.CheckAuthorization(context.Background())
+		ok, email, err := user.CheckAuthorization(context.Background())
 		if err != nil {
 			log.Fatalf("Failed to check authorization for the user: %s", err)
 		}
@@ -428,7 +429,7 @@ func main() {
 			log.Fatalf("Invalid state reached for user cert, cannot continue further")
 		}
 
-		err = user.RequestCerts(context.Background(), 24*time.Hour)
+		err = user.RequestCerts(context.Background(), email, 24*time.Hour)
 		if err != nil {
 			log.Fatalf("Failed to get the certs %s", err)
 		}

@@ -13,17 +13,22 @@ import (
 	"github.com/pkg/errors"
 )
 
+// I ran out of names to give
 type CertAccorder struct {
 	pskStore    accord.PSKStore
 	certManager *accord.CertManager
 	aesgcm      *accord.AESGCM
+	domain      string
+	authz       accord.Authz
 }
 
-func NewCertAccorder(pskStore accord.PSKStore, certManager *accord.CertManager) *CertAccorder {
+func NewCertAccorder(pskStore accord.PSKStore, certManager *accord.CertManager, domain string, authz accord.Authz) *CertAccorder {
 	return &CertAccorder{
 		pskStore:    pskStore,
 		certManager: certManager,
 		aesgcm:      accord.InitAESGCM(pskStore),
+		domain:      domain,
+		authz:       authz,
 	}
 }
 
@@ -88,17 +93,18 @@ func (s *CertAccorder) UserAuth(ctx context.Context, userAuthRequest *protocol.U
 	if err != nil {
 		return nil, errors.Wrapf(err, "Cannot convert pb token to *oauth2.Token")
 	}
-	log.Printf("oauthToken: %#v", oauthToken)
+	log.Printf("Received oauthToken: %#v", oauthToken)
 	googleAuth := &accord.GoogleAuth{
-		Domain: "mistsys.com",
+		Domain: s.domain,
 		Token:  oauthToken,
 	}
-	valid, err := googleAuth.ValidateToken(ctx)
+	valid, email, err := googleAuth.ValidateToken(ctx)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Failed to validate token")
 	}
 	return &protocol.UserAuthResponse{
-		Valid: valid,
+		UserId: email,
+		Valid:  valid,
 	}, nil
 }
 
@@ -106,14 +112,21 @@ func (s *CertAccorder) UserCert(ctx context.Context, certRequest *protocol.UserC
 
 	validFrom, _ := ptypes.Timestamp(certRequest.ValidFrom)
 	validUntil, _ := ptypes.Timestamp(certRequest.ValidUntil)
+
+	authorizedPrincipals, err := s.authz.Authorized(certRequest.UserId, certRequest.AuthorizedPrincipals)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Failed authorization")
+	}
+
 	srq := &accord.CertSignRequest{
 		PubKey:     certRequest.PublicKey,
 		ValidFrom:  validFrom,
 		ValidUntil: validUntil,
 		Id:         certRequest.RemoteUsername,
 		Serial:     1,
-		Principals: certRequest.AuthorizedPrincipals,
+		Principals: authorizedPrincipals,
 	}
+
 	userCert, err := s.certManager.SignUserCert(srq)
 	if err != nil {
 		return &protocol.UserCertResponse{

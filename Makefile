@@ -9,7 +9,7 @@ install:
 	$(go) install $(set_vars) ./...
 
 _builds:
-	mkdir -p _builds/{linx,osx}
+	mkdir -p _builds/{linux,osx}
 
 build-osx: _builds
 	GOOS=darwin $(go) build $(set_vars) -o _builds/osx/accord_client ./cmd/accord_client

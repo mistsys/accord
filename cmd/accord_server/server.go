@@ -73,7 +73,6 @@ func main() {
 	rootCA := flag.String("rootca", "", "Path to the root CA cert. They need to be encrypted")
 	userCA := flag.String("userca", "", "Path to the user CA cert. They need to be encrypted")
 	port := flag.Int("port", defaultPort, "Port to use. This is overriden to 443 because letsencrypt will be used")
-	psksFile := flag.String("path.psks", "", "A JSON file with all the PSKs that we're creating servers with")
 	healthCheckPort := flag.Int("health.port", 9110, "Where to listen for the health checks")
 	// these should only use used in insecure mode for development.. or from a config
 	// read from a parameter store what the password is
@@ -82,12 +81,15 @@ func main() {
 	cacheDir := flag.String("autocert.cache", "cache", "Where to save the cached certificates, needs to be writable")
 	contactEmail := flag.String("autocert.contactemail", defaultContactEmail, "Contact email to use for Lets Encrypt certificates")
 	roleArn := flag.String("role-arn", "", "Role ARN to use for reading the parameter strings for root certificate")
+	psksFile := flag.String("path.psks", "", "A JSON file with all the PSKs that we're creating servers with")
 	certsDir := flag.String("path.certs", "", "Path where certificates are -- used if role-arn is set")
+	authzFile := flag.String("path.authz", "", "Path where the authorization file is")
 	region := flag.String("aws.region", "us-east-1", "Which AWS region are we on?")
 	paramsPrefix := flag.String("params-prefix", "", "Where to look for the passphrase to decrypt the HostCA and UserCA keys")
 	// these should only be used for testing
 	sslKey := flag.String("sslkey", "", "Path to the SSL key")
 	sslCert := flag.String("sslcert", "", "Path to the SSL cert")
+	oauthDomain := flag.String("domain", "mistsys.com", "Domain to use for Oauth2")
 	hostname := flag.String("hostname", "localhost", "Hostname to use")
 	// if sslcerts aren't explicity
 	flag.Parse()
@@ -128,8 +130,21 @@ func main() {
 
 	status.ServePort(*healthCheckPort)
 
+	var authz accord.Authz
+	if *authzFile == "" {
+		log.Printf("No authz file created, using GrantAll -- do not use this in Production")
+		authz = accord.GrantAll{}
+	} else {
+		authz, err = accord.NewSimpleAuthFromFile(*authzFile)
+		if err != nil {
+			log.Fatalf("Failed to read auth file: %s", *authzFile)
+		}
+	}
+
+	certAccorder := certserver.NewCertAccorder(pskStore, certManager, *oauthDomain, authz)
+
 	server := grpc.NewServer()
-	protocol.RegisterCertServer(server, certserver.NewCertAccorder(pskStore, certManager))
+	protocol.RegisterCertServer(server, certAccorder)
 	reflection.Register(server)
 	addr := ":" + strconv.Itoa(*port)
 	if *insecure {
@@ -164,7 +179,7 @@ func main() {
 		// TODO: refactor this, check for certs first or use config
 		server := grpc.NewServer(grpc.Creds(creds))
 
-		protocol.RegisterCertServer(server, certserver.NewCertAccorder(pskStore, certManager))
+		protocol.RegisterCertServer(server, certAccorder)
 		reflection.Register(server)
 		mux := http.DefaultServeMux
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

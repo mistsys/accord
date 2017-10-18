@@ -1,7 +1,9 @@
 package accord
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 
 	"github.com/pkg/errors"
 )
@@ -20,7 +22,7 @@ type Authz interface {
 // GrantAll is the authz module that grants everyone everything
 type GrantAll struct{}
 
-func (g *GrantAll) Authorized(user string, principals []string) ([]string, error) {
+func (g GrantAll) Authorized(user string, principals []string) ([]string, error) {
 	return principals, nil
 }
 
@@ -34,7 +36,7 @@ type SimpleAuth struct {
 	AccessMap map[string][]string `json:"access_map",yaml:"access_map"`
 }
 
-func NewSimpleAuthFromFile(filePath string) (*SimpleAuth, error){
+func NewSimpleAuthFromFile(filePath string) (*SimpleAuth, error) {
 	s := &SimpleAuth{}
 
 	content, err := ioutil.ReadFile(filePath)
@@ -48,7 +50,7 @@ func NewSimpleAuthFromFile(filePath string) (*SimpleAuth, error){
 	return s, nil
 }
 
-func (s *SimpleAuth) IsAdmin(user string) bool {
+func (s SimpleAuth) IsAdmin(user string) bool {
 	for _, adminUser := range s.AdminUsers {
 		if user == adminUser {
 			return true
@@ -57,7 +59,7 @@ func (s *SimpleAuth) IsAdmin(user string) bool {
 	return false
 }
 
-func (s *SimpleAuth) validPrincipals(principals string) (bool, error) {
+func (s SimpleAuth) validPrincipals(principals []string) (bool, error) {
 	// Yes this is O(n^2) but the data size is going to be very small
 	// at most 100 elements, or at least if this is becoming a bottleneck
 	// you want something like LDAP and not hacking this simple implementation
@@ -69,8 +71,8 @@ func (s *SimpleAuth) validPrincipals(principals string) (bool, error) {
 	return true, nil
 }
 
-func contains (needle string, haystack []string) bool {
-	for _, thread := range  {
+func contains(needle string, haystack []string) bool {
+	for _, thread := range haystack {
 		if needle == thread {
 			return true
 		}
@@ -78,7 +80,7 @@ func contains (needle string, haystack []string) bool {
 	return false
 }
 
-func (s *SimpleAuth) Authorized(user string, principals []string) ([]string, error) {
+func (s SimpleAuth) Authorized(user string, principals []string) ([]string, error) {
 	if _, err := s.validPrincipals(principals); err != nil {
 		return nil, errors.Wrapf(err, "Invalid principals")
 	}
@@ -98,7 +100,7 @@ func (s *SimpleAuth) Authorized(user string, principals []string) ([]string, err
 	grantedPrincipals := []string{}
 
 	for _, p := range principals {
-		if contains(p, grantedAccess){
+		if contains(p, grantedAccess) {
 			grantedPrincipals = append(grantedPrincipals, p)
 		}
 	}

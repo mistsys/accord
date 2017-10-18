@@ -381,6 +381,7 @@ func (m *CertManager) SignUserCert(request *CertSignRequest) ([]byte, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "CertSignRequest isn't valid")
 	}
+
 	pubkey, comment, _, _, err := ssh.ParseAuthorizedKey(request.PubKey)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Failed to parse public key")
@@ -432,7 +433,7 @@ func (m *CertManager) SignHostCert(request *CertSignRequest) ([]byte, error) {
 
 	signer, err := m.rootCASigner()
 	if err != nil {
-		return nil, errors.Wrapf(err, "Cannot get the User CA signer")
+		return nil, errors.Wrapf(err, "Cannot get the Host CA signer")
 	}
 	err = cert.SignCert(rand.Reader, signer)
 	if err != nil {
