@@ -1,0 +1,192 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "com.mist.accord.protocol";
+option java_outer_classname = "Acccord";
+
+package protocol;
+
+import "google/protobuf/timestamp.proto";
+
+service Cert {
+    rpc HostAuth(HostAuthRequest) returns (HostAuthResponse) {}
+    rpc HostCert(HostCertRequest) returns (HostCertResponse) {}
+    rpc UserAuth(UserAuthRequest) returns (UserAuthResponse) {}
+    rpc UserCert(UserCertRequest) returns (UserCertResponse) {}
+    // This responds back with both host CAs that the users should trust
+    // and the user CA the servers should trust
+    rpc PublicTrustedCA(PublicTrustedCARequest) returns (PublicTrustedCAResponse) {}
+    // this is just for test/sanity
+    // We may report he metric to get a sense of how the latency between
+    // environments is faring
+    rpc Ping(PingRequest) returns (PingResponse) {}
+}
+
+message PingRequest {
+    google.protobuf.Timestamp requestTime = 1;
+    string name = 2;
+}
+
+message PingResponse {
+    ReplyMetadata metadata=1;
+    string message = 2;
+}
+
+message HostAuthRequest {
+    google.protobuf.Timestamp requestTime = 1;
+    // this will be using AES-GCM cipher
+    // and include the ID to be the first 4 bytes after concatenating with _ the following
+    // the <cloud_name>:<account_id>
+    // region
+    // environment
+    // this is used to identify the preshared key with the cert server
+    // in response, the cert server will return an ID that can be used for subsequent cert request
+    bytes authInfo = 2;
+}
+
+message Error {
+    string type =1;
+    string msg = 2;
+}
+
+// this is the protobuf message to decrypt the HostAuthResponse.authResponse bytes to
+message HostAuth {
+    bytes id = 1;
+    repeated Error errors=2;
+}
+
+message ReplyMetadata {
+    // copies the request time from the client
+    google.protobuf.Timestamp requestTime = 1;
+    // when the server initiated the response
+    google.protobuf.Timestamp responseTime = 2;
+}
+
+
+message HostAuthResponse {
+    ReplyMetadata metadata=1;
+
+    // this should be the encrypted response based on the key sent
+    // in the authInfo request for the AuthRequest
+    // this is expected to contain the encrypted HostAuth message
+    bytes authResponse =3;
+}
+    
+
+// this is only sent after the host has already authenticated with the server
+// someone reasonably can read the ID from memory if an attacker is already root on the host
+// but at that point all bets are off..
+// we can keep the id and relevant tokens encrypted on disk if we need to persist it
+// but since the AuthRequest should've taken care of identifying the machine
+// id can be sent over the TLS connection to the server
+message HostCertRequest {
+    google.protobuf.Timestamp requestTime = 1;
+    google.protobuf.Timestamp validFrom = 2;
+    google.protobuf.Timestamp validUntil = 3;
+    bytes id = 4;
+    // these need to be FQDN of all the IPs the host needs to have
+    repeated string hostnames = 5;
+    bytes publicKey = 6;
+}
+    
+    
+message HostCertResponse {
+    ReplyMetadata metadata=1;
+
+    // this is the cert for the host
+    bytes hostCert = 3;
+    // this is the cert the host should "trust" for users
+    // logging into the machines
+    bytes trustedUsersCACert = 4;   
+}
+
+
+message UserAuthRequest {
+    google.protobuf.Timestamp requestTime = 1;
+    string username=2;
+    // send the access token
+    OauthToken token=4;
+}
+
+message UserAuthResponse {
+    ReplyMetadata metadata=1;
+    string username=2;
+
+    bool valid=3;
+    bytes authResponse=4;
+}
+
+message UserCertRequest {
+    google.protobuf.Timestamp requestTime = 1;
+    string username=2;
+    // this should go in ID of the cert
+    string remoteUsername=3;
+    // the raw public key to sign with user cert
+    bytes publicKey=4;
+    // this is a hack to just respond back with the
+    // new principals added to the current cert
+    // also it's useful to log before/after for audit
+    // once again, never saved by server, just read
+    // and discarded...
+    // this will be disabled with a future version
+    // once the server has a database
+    bytes currentUserCert=5;
+
+    google.protobuf.Timestamp validFrom = 6;
+    google.protobuf.Timestamp validUntil = 7;
+    repeated string authorizedPrincipals= 8;
+    // this should be used for scripts to limit access
+    repeated string forceCommands = 9;
+}
+
+
+message OauthToken {
+    string accessToken=1;
+    string tokenType=2;
+    string refreshToken=3;
+    google.protobuf.Timestamp expiry=4;
+    // There's also a provision for additional information
+    // we don't need it for our uses yet, we can add them in future
+}
+
+message UserCertResponse {
+    ReplyMetadata metadata=1;
+
+    string username=2;
+    bytes userCert = 3;
+    repeated HostCA trustedHostCAs=4;
+}
+
+// Public Host Certificate Authority's Public Key
+// and additional information
+// at any given time more than one public CA might
+// be trusted, at most 2, so that servers can be
+// rotated to new certificates on time
+message HostCA {
+    google.protobuf.Timestamp validFrom = 1;
+    google.protobuf.Timestamp validUntil = 2;
+    bytes publicKey=3;
+}
+
+message UserCA {
+    google.protobuf.Timestamp validFrom = 1;
+    google.protobuf.Timestamp validUntil = 2;
+    bytes publicKey=3;
+}
+
+// I may add more parameters for logging in future
+message PublicTrustedCARequest{
+    google.protobuf.Timestamp requestTime = 1;
+}
+
+
+message PublicTrustedCAResponse{
+    ReplyMetadata metadata=1;
+    repeated HostCA hostCAs=2;
+    repeated UserCA UserCAs=3;
+
+    // the clients should update their corresponding
+    // revoked CA file with the contents
+    repeated HostCA revokedHostCAs=4;
+    repeated UserCA revokedUserCAs=5;
+}
