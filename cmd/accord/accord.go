@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"encoding/pem"
 	"flag"
 	"fmt"
@@ -15,7 +16,14 @@ import (
 	"os"
 	"time"
 
+	"github.com/mistsys/accord"
+	"github.com/mistsys/accord/id"
+
 	"golang.org/x/crypto/ssh"
+)
+
+var (
+	defaultSalt = "hUYh5x4N2DOnTIce"
 )
 
 /*
@@ -78,6 +86,8 @@ func main() {
 	hostname := flag.String("hostname", "", "Hostname to sign the cert for")
 	password := flag.String("password", "", "Password to encrypt the root key with")
 	task := flag.String("task", "genusercert", "Task to do")
+	psksFile := flag.String("path.psk", "deployments.json", "PSK Files for deployed servers shared keys")
+	hostSalt := flag.String("hostsalt", defaultSalt, "Randomly generated string to prefix requests when creating host requests")
 	flag.Parse()
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -277,6 +287,42 @@ func main() {
 		//fmt.Printf("Signature: %#v\n", cert.Signature)
 		//fmt.Printf(string(MarshalCert(cert)))
 		//fmt.Println(comment)
+	case "add-deployment":
+		args := flag.Args()
+		if len(args) == 0 {
+			log.Fatalf("No arguments given, usage: add-deployment <deploymentId>")
+		}
+		psks := make(map[uint32][]byte)
+		if _, err := os.Stat(*psksFile); !os.IsNotExist(err) {
+			dat, err := ioutil.ReadFile(*psksFile)
+			if err != nil {
+				log.Fatalf("Unable to read %s. %s", *psksFile, err)
+			}
+			err = json.Unmarshal(dat, &psks)
+			if err != nil {
+				log.Fatalf("Unable to unmarshal contents from %s. %s", *psksFile, err)
+			}
+		}
+		deploymentId, err := id.KeyID(args[0], *hostSalt)
+		if err != nil {
+			log.Fatalf("Failed to generate keyID %s", err)
+		}
+		if val, ok := psks[deploymentId]; ok {
+			fmt.Printf("PSK=%s\n", val)
+			log.Fatalf("psk for deployment %s=%d has already been generated", args[0], deploymentId)
+		}
+		key := accord.GenerateKey()
+		psks[deploymentId] = key
+		fmt.Println(string(key))
+
+		content, err := json.Marshal(psks)
+		if err != nil {
+			log.Fatalf("Failed to marshal psks %s", err)
+		}
+		err = ioutil.WriteFile(*psksFile, content, 0644)
+		if err != nil {
+			log.Fatalf("Failed to write to file %s. %s", *psksFile, err)
+		}
 	}
 
 }

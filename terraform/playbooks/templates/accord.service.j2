@@ -4,7 +4,7 @@ Description=accord
 [Service]
 User={{owner}}
 Group={{group}}
-ExecStart=/srv/accord/bin/accord -autocert.cache /srv/cache -role-arn={{role_arn}} -params-prefix={{params_prefix}} -path.certs /srv/accord/certs -hostname={{hostname}}
+ExecStart=/srv/accord/bin/accord -autocert.cache /srv/cache -role-arn={{role_arn}} -params-prefix={{params_prefix}} -path.certs /srv/accord/certs -hostname={{hostname}} -path.psks /srv/accord/conf/deployments.json
 Restart=on-abort
 
 [Install]

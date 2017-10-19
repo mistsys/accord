@@ -24,6 +24,13 @@ clean :
 test:
 	$(go) test ./...
 
+add-deployment:
+	$(go) run ./cmd/accord/accord.go -task add-deployment -path.psk (TOP)/terraform/playbooks/files/deployments.json $(DEPLOYMENT_ID)
+
+release-server:
+	GOOS=linux go build -o $(TOP)/terraform/playbooks/files/accord $(TOP)/cmd/accord_server
+	cd $(TOP)/terraform && make upload
+
 integration-test:
 	./integration.sh
 

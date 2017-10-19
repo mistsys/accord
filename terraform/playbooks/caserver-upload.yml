@@ -13,6 +13,12 @@
         owner: accord
         group: accord
         state: directory
+    - name: Create conf directory
+      file:
+        path: /srv/accord-{{ day }}/conf
+        owner: accord
+        group: accord
+        state: directory
     - name: Create certs cache directory
       file:
         path: /srv/cache
@@ -42,6 +48,12 @@
     - name: Apply permissions to acquire service ports
       command: /sbin/setcap "cap_net_bind_service=ep" /srv/accord-{{ day }}/bin/accord
       register: accord
+    - name: Copy deployments file
+      copy:
+        src: files/deployments.json
+        owner: accord
+        group: accord
+        dest: /srv/accord-{{ day }}/conf/deployments.json
     - name: symlink release {{ day }}
       file:
         src: /srv/accord-{{ day }}

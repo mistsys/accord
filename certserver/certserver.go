@@ -93,7 +93,7 @@ func (s *AccordServer) UserAuth(ctx context.Context, userAuthRequest *protocol.U
 	if err != nil {
 		return nil, errors.Wrapf(err, "Cannot convert pb token to *oauth2.Token")
 	}
-	log.Printf("Received oauthToken: %#v", oauthToken)
+	log.Printf("Received authentication token for user: %s", userAuthRequest.GetUsername())
 	googleAuth := &accord.GoogleAuth{
 		Domain: s.domain,
 		Token:  oauthToken,

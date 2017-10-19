@@ -512,6 +512,7 @@ func main() {
 		for _, userCA := range resp.UserCAs {
 			fmt.Println(string(userCA.GetPublicKey()))
 		}
+		close(done)
 	case "updatehostcerts":
 		c := protocol.NewCertClient(conn)
 		resp, err := c.PublicTrustedCA(context.Background(), &protocol.PublicTrustedCARequest{

@@ -32,6 +32,44 @@ func generateNonce(size int) ([]byte, error) {
 	return nonce, nil
 }
 
+// len(encodeURL) == 64. This allows (x <= 265) x % 64 to have an even
+// distribution.
+const encodeURL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+
+// A helper function create and fill a slice of length n with characters from
+// a-zA-Z0-9_-. It panics if there are any problems getting random bytes.
+func RandAsciiBytes(n int) []byte {
+	output := make([]byte, n)
+
+	// We will take n bytes, one byte for each character of output.
+	randomness := make([]byte, n)
+
+	// read all random
+	_, err := rand.Read(randomness)
+	if err != nil {
+		panic(err)
+	}
+
+	// fill output
+	for pos := range output {
+		// get random item
+		random := uint8(randomness[pos])
+
+		// random % 64
+		randomPos := random % uint8(len(encodeURL))
+
+		// put into output
+		output[pos] = encodeURL[randomPos]
+	}
+
+	return output
+}
+
+// GenerateKey generates a new AES-256 key.
+func GenerateKey() []byte {
+	return RandAsciiBytes(KeySize)
+}
+
 // Initialize the AESGCM with a PSK store, this can be anything from a local instance
 // or something that reads from a HSM or memory, the logic for getting the key securely
 // will be in the PSKStore implmentation
