@@ -28,6 +28,10 @@ var (
 	keyPairRegex          = regexp.MustCompile(`ca_(?P<type>user|host)_(?P<id>\d+).?(?P<key_type>pub)?`)
 )
 
+// TODO: this needs a real refactoring
+// I designed it to be very simple and it grew relatively organic
+// Once the interfaces are little cleaner, update the CertManager to not store everything
+
 // I have doubts about this approach
 // the passwords are stored in plaintext in memory
 // but the actual certs are read on demand, and not kept in memory
@@ -39,10 +43,12 @@ var (
 // TODO: refactor to use CACertPair structure
 type CertManager struct {
 	rootCAPath       string
+	rootCAId         int
 	rootCAPassword   string
 	rootCAPubKey     ssh.PublicKey
 	rootCAValidFrom  time.Time
 	rootCAValidUntil time.Time
+	userCAId         int
 	userCAPath       string
 	userCAPassword   string
 	userCAPubKey     ssh.PublicKey
@@ -182,6 +188,7 @@ func NewCertManagerWithParameters(certsDir string, region string, roleArn string
 			if err != nil {
 				return nil, errors.Wrapf(err, "Failed to read the user key for id %d", id)
 			}
+			certManager.userCAId = certPair.Metadata.Id
 			certManager.userCAPassword = passphrase
 			certManager.userCAPubKey = certPair.PublicKey
 			certManager.userCAValidFrom = certPair.Metadata.ValidFrom
@@ -192,6 +199,7 @@ func NewCertManagerWithParameters(certsDir string, region string, roleArn string
 			if err != nil {
 				return nil, errors.Wrapf(err, "Failed to read the host key for id %d", id)
 			}
+			certManager.rootCAId = certPair.Metadata.Id
 			certManager.rootCAPassword = passphrase
 			certManager.rootCAPubKey = certPair.PublicKey
 			certManager.rootCAValidFrom = certPair.Metadata.ValidFrom
@@ -358,6 +366,32 @@ func (m *CertManager) marshalCert(cert *ssh.Certificate, comment string) []byte 
 // it makes sense to make the API exposed to users be a little more flexible
 func (m *CertManager) RootCAPublicKeys() []ssh.PublicKey {
 	return []ssh.PublicKey{m.rootCAPubKey}
+}
+
+// CAPublic is the public data that we want to return the user
+type CAPublic struct {
+	Id         int       `json:"id"`
+	ValidFrom  time.Time `json:"valid_from"`
+	ValidUntil time.Time `json:"valid_until"`
+	PublicKey  []byte
+}
+
+func (m *CertManager) HostCAs() []CAPublic {
+	return []CAPublic{{
+		Id:         m.rootCAId,
+		PublicKey:  ssh.MarshalAuthorizedKey(m.rootCAPubKey),
+		ValidFrom:  m.rootCAValidFrom,
+		ValidUntil: m.rootCAValidUntil,
+	}}
+}
+
+func (m *CertManager) UserCAs() []CAPublic {
+	return []CAPublic{{
+		Id:         m.userCAId,
+		PublicKey:  ssh.MarshalAuthorizedKey(m.userCAPubKey),
+		ValidFrom:  m.userCAValidFrom,
+		ValidUntil: m.userCAValidUntil,
+	}}
 }
 
 func (m *CertManager) UserCAPublicKeys() []ssh.PublicKey {

@@ -118,6 +118,9 @@ func (s *AccordServer) UserCert(ctx context.Context, certRequest *protocol.UserC
 		return nil, errors.Wrapf(err, "Failed authorization")
 	}
 
+	// TODO: increase serial every time user requests for a certificate
+	// this requires some way to keep track of state, so shelving until
+	// the project gets a database of some sort
 	srq := &accord.CertSignRequest{
 		PubKey:     certRequest.PublicKey,
 		ValidFrom:  validFrom,
@@ -139,8 +142,29 @@ func (s *AccordServer) UserCert(ctx context.Context, certRequest *protocol.UserC
 	}, nil
 }
 
-func (s *AccordServer) PublicTrustedCA(context.Context, *protocol.PublicTrustedCARequest) (*protocol.PublicTrustedCAResponse, error) {
-	panic("not implemented")
+// This doesn't populate the RevokedCerts yet
+// TODO: try to use same data structure
+func (s *AccordServer) PublicTrustedCA(ctx context.Context, trustedCARequest *protocol.PublicTrustedCARequest) (*protocol.PublicTrustedCAResponse, error) {
+	hostCAs := s.certManager.HostCAs()
+	userCAs := s.certManager.UserCAs()
+
+	pbHostCAs := []*protocol.HostCA{}
+	pbUserCAs := []*protocol.UserCA{}
+
+	for _, h := range hostCAs {
+		pbHostCAs = append(pbHostCAs, accord.ToHostCA(h))
+	}
+
+	for _, u := range userCAs {
+		pbUserCAs = append(pbUserCAs, accord.ToUserCA(u))
+	}
+
+	return &protocol.PublicTrustedCAResponse{
+		Metadata: replyMetadata(trustedCARequest.GetRequestTime()),
+		HostCAs:  pbHostCAs,
+		UserCAs:  pbUserCAs,
+	}, nil
+
 }
 
 func (s *AccordServer) Ping(ctx context.Context, req *protocol.PingRequest) (*protocol.PingResponse, error) {

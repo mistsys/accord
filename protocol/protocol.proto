@@ -169,12 +169,14 @@ message HostCA {
     google.protobuf.Timestamp validFrom = 1;
     google.protobuf.Timestamp validUntil = 2;
     bytes publicKey=3;
+    uint64 id=4;
 }
 
 message UserCA {
     google.protobuf.Timestamp validFrom = 1;
     google.protobuf.Timestamp validUntil = 2;
     bytes publicKey=3;
+    uint64 id=4;
 }
 
 // I may add more parameters for logging in future

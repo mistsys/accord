@@ -24,6 +24,9 @@ clean :
 test:
 	$(go) test ./...
 
+integration-test:
+	./integration.sh
+
 all: install
 
 # fetch depedencies

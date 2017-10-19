@@ -409,7 +409,7 @@ func main() {
 
 		if *remoteUsername == "" {
 			log.Printf("remoteusername is empty, picking the same as current username: %s", usr.Name)
-			remoteUsername = &usr.Name
+			remoteUsername = &usr.Username
 		}
 
 		//log.Printf("token: %v", tok)
@@ -435,6 +435,25 @@ func main() {
 		}
 		close(done)
 		//log.Fatalf("Not done yet")
+	case "trustedcerts":
+		c := protocol.NewCertClient(conn)
+		// Queries and prints out the trusted certs
+		resp, err := c.PublicTrustedCA(context.Background(), &protocol.PublicTrustedCARequest{
+			RequestTime: ptypes.TimestampNow(),
+		})
+		if err != nil {
+			log.Fatalf("Failed to get the certs %s", err)
+		}
+		fmt.Println("=== Host CAs ===")
+		for _, hostCA := range resp.HostCAs {
+			fmt.Println(string(hostCA.GetPublicKey()))
+		}
+
+		fmt.Println("=== User CAs ===")
+		for _, userCA := range resp.UserCAs {
+			fmt.Println(string(userCA.GetPublicKey()))
+		}
+		//fmt.Printf("Resp: %#v\n", resp)
 	default:
 		log.Fatalf("Don't know the task %s", *task)
 	}
