@@ -11,6 +11,7 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -293,6 +294,62 @@ func listPubKeysInDir(dir string) ([]string, error) {
 	return files, nil
 }
 
+func deleteEmpty(s []string) []string {
+	var r []string
+	for _, str := range s {
+		if str != "" {
+			r = append(r, str)
+		}
+	}
+	return r
+}
+
+func updateUsersCertAuthority(filePath string, trustedUserCAs [][]byte) error {
+	f, err := os.Create(filePath)
+	if err != nil {
+		return errors.Wrapf(err, "failed to create file %s", filePath)
+	}
+	defer f.Close()
+	for _, b := range trustedUserCAs {
+		f.Write(b)
+	}
+	return nil
+}
+
+func updateKnownHostsCertAuthority(filePath string, trustedHostCAs [][]byte) error {
+	input, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return errors.Wrapf(err, "Failed to read %s", filePath)
+	}
+
+	re := regexp.MustCompile(`(?ms:^#accord-trusted-hosts-start(.*)#accord-trusted-hosts-end)`)
+	newlines := strings.Split(re.ReplaceAllString(string(input), ""), "\n")
+	// the last synt
+	newlines = deleteEmpty(newlines)
+	newlines = append(newlines, "#accord-trusted-hosts-start")
+	for _, b := range trustedHostCAs {
+
+		if b[len(b)-1] == '\n' {
+			newlines = append(newlines, "@cert-authority * "+string(b[:len(b)-1]))
+		} else {
+			newlines = append(newlines, "@cert-authority * "+string(b))
+		}
+
+	}
+	newlines = append(newlines, "#accord-trusted-hosts-end")
+	backupFile := filePath + ".bak"
+	log.Println("Copied old file to " + backupFile)
+	err = os.Rename(filePath, backupFile)
+	if err != nil {
+		return errors.Wrapf(err, "Failed to rename file to %s", backupFile)
+	}
+	err = ioutil.WriteFile(filePath, []byte(strings.Join(newlines, "\n")), 0644)
+	if err != nil {
+		return errors.Wrapf(err, "Failed to write to %s", filePath)
+	}
+	return nil
+}
+
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	address := flag.String("server", defaultAddress, "The grpc server to contact")
@@ -310,6 +367,8 @@ func main() {
 	hostSalt := flag.String("hostsalt", defaultSalt, "Randomly generated string to prefix requests when creating host requests")
 	userKeysPath := flag.String("userkeys", "", "Where to find the user's public keys")
 	domain := flag.String("domain", "mistsys.com", "Google Apps Domain to validate for")
+	knownHostsFile := flag.String("knownhosts", "", "Known Hosts file, defaults to ~/.ssh/known_hosts")
+	userCACertsFile := flag.String("userca", "", "Where the userca file should be, defaults to /etc/ssh/users_ca.pub")
 	var (
 		hostnames  = stringSlice{}
 		principals = stringSlice{}
@@ -453,7 +512,52 @@ func main() {
 		for _, userCA := range resp.UserCAs {
 			fmt.Println(string(userCA.GetPublicKey()))
 		}
+	case "updatehostcerts":
+		c := protocol.NewCertClient(conn)
+		resp, err := c.PublicTrustedCA(context.Background(), &protocol.PublicTrustedCARequest{
+			RequestTime: ptypes.TimestampNow(),
+		})
+		if err != nil {
+			log.Fatalf("Failed to get the certs %s", err)
+		}
+		hostCerts := [][]byte{}
+		//fmt.Println("=== Host CAs ===")
+		for _, hostCA := range resp.HostCAs {
+			hostCerts = append(hostCerts, hostCA.PublicKey)
+		}
+		if *knownHostsFile == "" {
+			usr, err := user.Current()
+			if err != nil {
+				log.Fatal(err)
+			}
+			defaultPath := filepath.Join(usr.HomeDir, ".ssh", "known_hosts")
+			log.Printf("No knownhosts file given, using default: %s", defaultPath)
+			knownHostsFile = &defaultPath
+		}
+		updateKnownHostsCertAuthority(*knownHostsFile, hostCerts)
+		close(done)
 		//fmt.Printf("Resp: %#v\n", resp)
+	case "updateusercerts":
+		c := protocol.NewCertClient(conn)
+		resp, err := c.PublicTrustedCA(context.Background(), &protocol.PublicTrustedCARequest{
+			RequestTime: ptypes.TimestampNow(),
+		})
+		if err != nil {
+			log.Fatalf("Failed to get the certs %s", err)
+		}
+		userCerts := [][]byte{}
+		//fmt.Println("=== Host CAs ===")
+		for _, userCA := range resp.UserCAs {
+			userCerts = append(userCerts, userCA.PublicKey)
+		}
+		if *userCACertsFile == "" {
+			defaultPath := "/etc/ssh/users_ca.pub"
+			log.Printf("No usersCA file given, using default: %s", defaultPath)
+			userCACertsFile = &defaultPath
+		}
+		updateUsersCertAuthority(*userCACertsFile, userCerts)
+		close(done)
+
 	default:
 		log.Fatalf("Don't know the task %s", *task)
 	}

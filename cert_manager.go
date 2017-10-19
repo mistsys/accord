@@ -429,6 +429,13 @@ func (m *CertManager) SignUserCert(request *CertSignRequest) ([]byte, error) {
 		ValidAfter:      uint64(request.ValidFrom.Unix()),
 		ValidBefore:     uint64(request.ValidUntil.Unix()),
 		ValidPrincipals: request.Principals,
+		Permissions: ssh.Permissions{
+			Extensions: map[string]string{ // for compatibility with ssh-keygen's output
+				"permit-X11-forwarding":   "",
+				"permit-agent-forwarding": "",
+				"permit-pty":              "",
+				"permit-user-rc":          "",
+			}},
 	}
 
 	signer, err := m.userCASigner()
