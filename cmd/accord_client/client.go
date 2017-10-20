@@ -604,6 +604,17 @@ func main() {
 		updateUsersCertAuthority(*userCACertsFile, userCerts)
 		close(done)
 
+	case "updatesshd":
+		if *sshdFile == "" {
+			defaultPath := "/etc/ssh/sshd_config"
+			log.Printf("No sshdConfig file given, using default: %s", defaultPath)
+			sshdFile = &defaultPath
+		}
+		err := accord.UpdateSSHD(*sshdFile)
+		if err != nil {
+			log.Fatalf("Failed to write %s with %s", *sshdFile, err)
+		}
+		close(done)
 	default:
 		log.Fatalf("Don't know the task %s", *task)
 	}
