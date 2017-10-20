@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/golang/protobuf/ptypes"
 	"github.com/mistsys/accord"
+	"github.com/mistsys/accord/cloud_metadata"
 	"github.com/mistsys/accord/db"
 	"github.com/mistsys/accord/id"
 	"github.com/mistsys/accord/protocol"
@@ -82,8 +84,26 @@ func (h *Host) Authenticate(ctx context.Context) (string, error) {
 	}
 	//log.Printf("keyId: %d", keyId)
 	aesgcm := accord.InitAESGCM(h.pskStore)
-	// TODO: validate the instance doc and send that to the server to keep in records
-	encrypted, err := aesgcm.Encrypt([]byte(`THIS IS WHERE INSTANCE DOC WOULD GO`), keyId)
+
+	cloud, err := cloud_metadata.CloudService()
+	if err != nil {
+		log.Printf("Failed to read metadata %s", err)
+	}
+	metadata := []byte("Unknown: test code")
+	if cloud == cloud_metadata.AWS {
+		instanceInfo, err := cloud_metadata.GetAWSInstanceInfo()
+		if err != nil {
+			return "", errors.Wrapf(err, "Failed to read AWS instance info")
+		}
+		metadata, err = json.Marshal(instanceInfo)
+		if err != nil {
+			return "", errors.Wrapf(err, "Failed to serialize the metadata")
+		}
+	} else {
+		return "", errors.Wrapf(err, "Cloud %s not supported yet", cloud)
+	}
+	// sends the data to the server to keep for records
+	encrypted, err := aesgcm.Encrypt(metadata, keyId)
 	if err != nil {
 		return "", errors.Wrapf(err, "Failed to encrypt the message")
 	}
