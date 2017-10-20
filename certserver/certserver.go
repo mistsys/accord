@@ -15,20 +15,24 @@ import (
 
 // I ran out of names to give
 type AccordServer struct {
-	pskStore    accord.PSKStore
-	certManager *accord.CertManager
-	aesgcm      *accord.AESGCM
-	domain      string
-	authz       accord.Authz
+	pskStore       accord.PSKStore
+	certManager    *accord.CertManager
+	aesgcm         *accord.AESGCM
+	googleClientId string
+	domain         string
+	authz          accord.Authz
 }
 
-func NewAccordServer(pskStore accord.PSKStore, certManager *accord.CertManager, domain string, authz accord.Authz) *AccordServer {
+func NewAccordServer(pskStore accord.PSKStore, certManager *accord.CertManager,
+	googleClientId string,
+	domain string, authz accord.Authz) *AccordServer {
 	return &AccordServer{
-		pskStore:    pskStore,
-		certManager: certManager,
-		aesgcm:      accord.InitAESGCM(pskStore),
-		domain:      domain,
-		authz:       authz,
+		pskStore:       pskStore,
+		certManager:    certManager,
+		googleClientId: googleClientId,
+		aesgcm:         accord.InitAESGCM(pskStore),
+		domain:         domain,
+		authz:          authz,
 	}
 }
 
@@ -95,8 +99,9 @@ func (s *AccordServer) UserAuth(ctx context.Context, userAuthRequest *protocol.U
 	}
 	log.Printf("Received authentication token for user: %s", userAuthRequest.GetUsername())
 	googleAuth := &accord.GoogleAuth{
-		Domain: s.domain,
-		Token:  oauthToken,
+		Domain:   s.domain,
+		ClientId: s.googleClientId,
+		Token:    oauthToken,
 	}
 	valid, email, err := googleAuth.ValidateToken(ctx)
 	if err != nil {

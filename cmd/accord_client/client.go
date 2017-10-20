@@ -386,9 +386,12 @@ func main() {
 	serverCert := flag.String("cert", "", "Server cert to use")
 	hostSalt := flag.String("hostsalt", defaultSalt, "Randomly generated string to prefix requests when creating host requests")
 	userKeysPath := flag.String("userkeys", "", "Where to find the user's public keys")
+	googleClientId := flag.String("google.clientid", "", "Which Google Apps ClientID to use")
+	googleClientSecret := flag.String("google.clientsecret", "", "Which Google Apps Client Secret to use, if not baked in already")
 	domain := flag.String("domain", "mistsys.com", "Google Apps Domain to validate for")
 	knownHostsFile := flag.String("knownhosts", "", "Known Hosts file, defaults to ~/.ssh/known_hosts")
 	userCACertsFile := flag.String("userca", "", "Where the userca file should be, defaults to /etc/ssh/users_ca.pub")
+	sshdFile := flag.String("sshdconfig", "", "SSHD Configuration file, defaults to /etc/ssh/sshd_config")
 	var (
 		hostnames  = stringSlice{}
 		principals = stringSlice{}
@@ -401,6 +404,8 @@ func main() {
 		conn *grpc.ClientConn
 		err  error
 	)
+	// this is very lazy way to keep the service running until job is done, in this kind of application
+	// once I break it out further, it will change to something more sophisticated
 	var done = make(chan struct{})
 	// Set up a connection to the server.
 	if *insecure {
@@ -466,7 +471,27 @@ func main() {
 	case "usercert":
 		c := protocol.NewCertClient(conn)
 		log.Println("Starting authentication for user")
+		var (
+			clientId     string
+			clientSecret string
+		)
+		// Use the given value if explicitly given, otherwise take the value
+		// from what should've been set at build time
+		if *googleClientId != "" {
+			clientId = *googleClientId
+		} else {
+			clientId = accord.ClientID
+		}
+
+		if *googleClientSecret != "" {
+			clientSecret = *googleClientSecret
+		} else {
+			clientSecret = accord.ClientSecret
+		}
+
 		googleAuth := &accord.GoogleAuth{
+			ClientId:      clientId,
+			ClientSecret:  clientSecret,
 			Domain:        *domain,
 			UseWebServer:  !*nowebserver,
 			WebServerPort: 8091,

@@ -89,6 +89,7 @@ func main() {
 	// these should only be used for testing
 	sslKey := flag.String("sslkey", "", "Path to the SSL key")
 	sslCert := flag.String("sslcert", "", "Path to the SSL cert")
+	googleClientId := flag.String("google.clientid", "", "Which Google Apps ClientID to use")
 	oauthDomain := flag.String("domain", "mistsys.com", "Domain to use for Oauth2")
 	hostname := flag.String("hostname", "localhost", "Hostname to use")
 	// if sslcerts aren't explicity
@@ -141,7 +142,17 @@ func main() {
 		}
 	}
 
-	certAccorder := certserver.NewAccordServer(pskStore, certManager, *oauthDomain, authz)
+	var clientId string
+
+	// Use the given value if explicitly given, otherwise take the value
+	// from what should've been set at build time
+	if *googleClientId != "" {
+		clientId = *googleClientId
+	} else {
+		clientId = accord.ClientID
+	}
+
+	certAccorder := certserver.NewAccordServer(pskStore, certManager, clientId, *oauthDomain, authz)
 
 	server := grpc.NewServer()
 	protocol.RegisterCertServer(server, certAccorder)
