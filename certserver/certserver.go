@@ -107,6 +107,7 @@ func (s *AccordServer) UserAuth(ctx context.Context, userAuthRequest *protocol.U
 	if err != nil {
 		return nil, errors.Wrapf(err, "Failed to validate token")
 	}
+	log.Printf("Valid user: %s email: %s", userAuthRequest.GetUsername(), email)
 	return &protocol.UserAuthResponse{
 		UserId: email,
 		Valid:  valid,

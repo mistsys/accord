@@ -2,6 +2,7 @@ go ?= go
 GO_LD_X = -X $(1)=$(2)
 # shrink the binaries
 GO_LDFLAGS += -s -w
+GO_LDFLAGS += $(if $(DEFAULT_SERVER), $(call GO_LD_X,github.com/mistsys/accord.DefaultServer,'$(DEFAULT_SERVER)'))
 GO_LDFLAGS += $(if $(GOOGLE_CLIENT_ID), $(call GO_LD_X,github.com/mistsys/accord.ClientID,'$(GOOGLE_CLIENT_ID)'))
 GO_LDFLAGS += $(if $(GOOGLE_CLIENT_SECRET), $(call GO_LD_X,github.com/mistsys/accord.ClientSecret,'$(GOOGLE_CLIENT_SECRET)'))
 set_vars += $(if $(GO_LDFLAGS), -ldflags="$(GO_LDFLAGS)")

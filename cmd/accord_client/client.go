@@ -33,10 +33,9 @@ import (
 )
 
 const (
-	defaultAddress = "localhost:50051"
-	defaultName    = "NewHost"
-	nanosInSecond  = 1000000000
-	defaultSalt    = "hUYh5x4N2DOnTIce"
+	defaultName   = "NewHost"
+	nanosInSecond = 1000000000
+	defaultSalt   = "hUYh5x4N2DOnTIce"
 )
 
 type stringSlice []string
@@ -372,7 +371,7 @@ func updateKnownHostsCertAuthority(filePath string, trustedHostCAs [][]byte) err
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	address := flag.String("server", defaultAddress, "The grpc server to contact")
+	address := flag.String("server", accord.DefaultServer, "The grpc server to contact")
 	task := flag.String("task", "hostcert", "Task to run, whether you want host cert, user cert")
 	psk := flag.String("psk", "", "Pre-shared key to use, this will be removed at some point in future")
 	insecure := flag.Bool("insecure", false, "Is this for development, and disable TLS?")
@@ -404,14 +403,16 @@ func main() {
 		conn *grpc.ClientConn
 		err  error
 	)
+	// if the address was added by the build step, and has quotes
+	serverAddress := accord.Unquote(*address)
 	// this is very lazy way to keep the service running until job is done, in this kind of application
 	// once I break it out further, it will change to something more sophisticated
 	var done = make(chan struct{})
 	// Set up a connection to the server.
 	if *insecure {
-		conn, err = grpc.Dial(*address, grpc.WithInsecure())
+		conn, err = grpc.Dial(serverAddress, grpc.WithInsecure())
 		if err != nil {
-			log.Fatalf("Unable to connect to %s: %v", *address, err)
+			log.Fatalf("Unable to connect to %s: %v", serverAddress, err)
 		}
 		defer conn.Close()
 	} else {
@@ -421,18 +422,18 @@ func main() {
 			if err != nil {
 				log.Fatalf("could not load tls cert: %s", err)
 			}
-			conn, err = grpc.Dial(*address, grpc.WithTransportCredentials(creds))
+			conn, err = grpc.Dial(serverAddress, grpc.WithTransportCredentials(creds))
 			if err != nil {
-				log.Fatalf("Unable to connect to %s: %v", *address, err)
+				log.Fatalf("Unable to connect to %s: %v", serverAddress, err)
 			}
 		} else {
 			// Use the operating system default root certificates.
 			opts := []grpc.DialOption{
 				grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{})),
 			}
-			conn, err = grpc.Dial(*address, opts...)
+			conn, err = grpc.Dial(serverAddress, opts...)
 			if err != nil {
-				log.Fatalf("Unable to connect to %s: %v", *address, err)
+				log.Fatalf("Unable to connect to %s: %v", serverAddress, err)
 			}
 			//creds = credentials.NewClientTLSFromCert(nil, "")
 		}
