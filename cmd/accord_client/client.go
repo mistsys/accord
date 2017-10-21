@@ -355,7 +355,7 @@ func updateKnownHostsCertAuthority(filePath string, trustedHostCAs [][]byte) err
 		}
 
 	}
-	newlines = append(newlines, "#accord-trusted-hosts-end")
+	newlines = append(newlines, "#accord-trusted-hosts-end", "\n")
 	backupFile := filePath + ".bak"
 	log.Println("Copied old file to " + backupFile)
 	err = os.Rename(filePath, backupFile)
@@ -372,7 +372,7 @@ func updateKnownHostsCertAuthority(filePath string, trustedHostCAs [][]byte) err
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	address := flag.String("server", accord.DefaultServer, "The grpc server to contact")
-	task := flag.String("task", "hostcert", "Task to run, whether you want host cert, user cert")
+	task := flag.String("task", "", "Task to run, whether you want host cert, user cert")
 	psk := flag.String("psk", "", "Pre-shared key to use, this will be removed at some point in future")
 	insecure := flag.Bool("insecure", false, "Is this for development, and disable TLS?")
 	dryrun := flag.Bool("dryrun", false, "Is this for testing?")
@@ -398,6 +398,15 @@ func main() {
 	flag.Var(&hostnames, "host", "Hostnames to sign for")
 	flag.Var(&principals, "p", "Principals to validate for, these are usernames and server class, etc")
 	flag.Parse()
+
+	argv := flag.Args()
+	fmt.Println(argv)
+
+	// if no -task was given but there is one unparsed arg, it is the task
+	if *task == "" && len(argv) >= 1 {
+		task = &argv[0]
+		argv = argv[1:]
+	}
 
 	var (
 		conn *grpc.ClientConn
@@ -513,7 +522,7 @@ func main() {
 		}
 
 		if *remoteUsername == "" {
-			log.Printf("remoteusername is empty, picking the same as current username: %s", usr.Name)
+			log.Printf("remoteusername is empty, picking the same as current username: %s", usr.Username)
 			remoteUsername = &usr.Username
 		}
 

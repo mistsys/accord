@@ -131,7 +131,7 @@ func (s *AccordServer) UserCert(ctx context.Context, certRequest *protocol.UserC
 		PubKey:     certRequest.PublicKey,
 		ValidFrom:  validFrom,
 		ValidUntil: validUntil,
-		Id:         certRequest.RemoteUsername,
+		Id:         certRequest.Username,
 		Serial:     1,
 		Principals: authorizedPrincipals,
 	}
