@@ -169,9 +169,16 @@ test_assets/test_pubkeys/ssh_host_rsa_key-cert.pub:
 
 This will print the cert files after getting them signed by the server.
 
+## Similar Projects
+
+- https://github.com/cloudtools/ssh-cert-authority
+
 # References
 
-https://speakerdeck.com/rlewis/how-netflix-gives-all-its-engineers-ssh-access-to-instances-running-in-production
-https://github.com/Netflix/bless
-https://github.com/lyft/python-blessclient
-https://code.facebook.com/posts/365787980419535/scalable-and-secure-access-with-ssh/
+- https://speakerdeck.com/rlewis/how-netflix-gives-all-its-engineers-ssh-access-to-instances-running-in-production
+- https://github.com/Netflix/bless
+- https://github.com/lyft/python-blessclient
+- https://code.facebook.com/posts/365787980419535/scalable-and-secure-access-with-ssh/
+- https://ef.gy/hardening-ssh
+- https://github.com/openssh/openssh-portable/blob/master/PROTOCOL.certkeys
+
