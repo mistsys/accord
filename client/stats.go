@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	nanosInSecond = 1000000000
+	nanosInSecond int64 = 1000000000
 )
 
 // calculate the latency from the metadata

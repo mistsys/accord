@@ -8,6 +8,8 @@ GO_LDFLAGS += $(if $(GOOGLE_CLIENT_SECRET), $(call GO_LD_X,github.com/mistsys/ac
 set_vars += $(if $(GO_LDFLAGS), -ldflags="$(GO_LDFLAGS)")
 TOP ?= .
 DEPLOYMENT_VAULT ?= depvault
+COVERAGE_DIR = _coverage
+coveragesubdirs =$(sort $(shell find . \( -path ./git -o -path ./vendor \) -prune -o -name '*.go' -a -printf '%h\n' | sed 's/^.\///g' | xargs))
 
 install:
 	$(go) install $(set_vars) ./...
@@ -27,6 +29,7 @@ build-linux: _builds
 clean :
 	-$(go) clean -i ./...
 
+
 test:
 	$(go) test ./...
 
@@ -44,10 +47,24 @@ release-client: build-osx build-linux
 integration-test:
 	./integration.sh
 
+$(COVERAGE_DIR):
+	mkdir -p $(COVERAGE_DIR)
+
+
+${COVERAGE_DIR}/coverage.txt:
+	echo "mode: set" > ${COVERAGE_DIR}/coverage.txt
+	-@for dir in $(shell $(go) list ./... | grep -v vendor |grep -v _vendor| grep -v vendor); do\
+		$(go) test -race -coverprofile=${COVERAGE_DIR}/profile.out -covermode=set $$dir;\
+		test ${COVERAGE_DIR}/$(dir).out && (cat ${COVERAGE_DIR}/profile.out | grep -v 'mode:' >> ${COVERAGE_DIR}/coverage.txt && rm ${COVERAGE_DIR}/profile.out)\
+	done
+
+test-coverage: $(COVERAGE_DIR) $(COVERAGE_DIR)/coverage.txt
+
+
 all: install
 
 # fetch depedencies
 getdeps :
 	$(go) get -u -v -d ./...
 
-.PHONY: all clean test getdeps
+.PHONY: all clean test getdeps test-coverage
