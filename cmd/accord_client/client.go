@@ -22,9 +22,8 @@ import (
 )
 
 const (
-	defaultName   = "NewHost"
-	nanosInSecond = 1000000000
-	defaultSalt   = "hUYh5x4N2DOnTIce"
+	defaultName = "NewHost"
+	defaultSalt = "hUYh5x4N2DOnTIce"
 )
 
 type stringSlice []string
@@ -41,16 +40,6 @@ func (s *stringSlice) Value() []string {
 func (s *stringSlice) Set(value string) error {
 	*s = append(*s, value)
 	return nil
-}
-
-// calculate the latency from the metadata
-// int64 in case the servers are out of sync
-func Latency(metadata *protocol.ReplyMetadata, curTime time.Time) (time.Duration, time.Duration) {
-	respTimeNsecs := int64(metadata.ResponseTime.Seconds)*nanosInSecond + int64(metadata.ResponseTime.Nanos)
-	reqTimeNsecs := int64(metadata.RequestTime.Seconds)*nanosInSecond + int64(metadata.RequestTime.Nanos)
-	serverNsecs := respTimeNsecs - reqTimeNsecs
-	totalDuration := curTime.Sub(time.Unix(0, reqTimeNsecs))
-	return time.Duration(serverNsecs), totalDuration
 }
 
 func main() {
@@ -74,6 +63,7 @@ func main() {
 	domain := flag.String("domain", "mistsys.com", "Google Apps Domain to validate for")
 	knownHostsFile := flag.String("knownhosts", "", "Known Hosts file, defaults to ~/.ssh/known_hosts")
 	userCACertsFile := flag.String("userca", "", "Where the userca file should be, defaults to /etc/ssh/users_ca.pub")
+	webserverPort := flag.Int("webserver.port", 8091, "Which port to run the auth webserver on")
 	sshdFile := flag.String("sshdconfig", "", "SSHD Configuration file, defaults to /etc/ssh/sshd_config")
 	var (
 		hostnames  = stringSlice{}
@@ -188,7 +178,7 @@ func main() {
 			ClientSecret:  clientSecret,
 			Domain:        *domain,
 			UseWebServer:  !*nowebserver,
-			WebServerPort: 8091,
+			WebServerPort: *webserverPort,
 		}
 
 		tok, err := googleAuth.Authenticate()
