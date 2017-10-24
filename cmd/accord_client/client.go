@@ -3,30 +3,19 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"os"
 	"os/user"
-	"path"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
-	"golang.org/x/crypto/ssh"
-	"golang.org/x/oauth2"
-	"golang.org/x/sys/unix"
-
 	"github.com/golang/protobuf/ptypes"
 	"github.com/mistsys/accord"
-	"github.com/mistsys/accord/cloud_metadata"
+	"github.com/mistsys/accord/client"
 	"github.com/mistsys/accord/db"
-	"github.com/mistsys/accord/id"
 	"github.com/mistsys/accord/protocol"
-	"github.com/pkg/errors"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -62,311 +51,6 @@ func Latency(metadata *protocol.ReplyMetadata, curTime time.Time) (time.Duration
 	serverNsecs := respTimeNsecs - reqTimeNsecs
 	totalDuration := curTime.Sub(time.Unix(0, reqTimeNsecs))
 	return time.Duration(serverNsecs), totalDuration
-}
-
-type Host struct {
-	c            protocol.CertClient
-	dryrun       bool
-	pskStore     accord.PSKStore
-	salt         string
-	deploymentId string
-	keysDir      string
-	hostnames    []string
-	uuid         []byte
-}
-
-// For now the response doesn't do a proper challenge auth
-func (h *Host) Authenticate(ctx context.Context) (string, error) {
-	keyId, err := id.KeyID(h.deploymentId, h.salt)
-	if err != nil {
-		return "", errors.Wrapf(err, "Failed to get the KeyId based on deploymentId")
-	}
-	//log.Printf("keyId: %d", keyId)
-	aesgcm := accord.InitAESGCM(h.pskStore)
-
-	cloud, err := cloud_metadata.CloudService()
-	if err != nil {
-		log.Printf("Failed to read metadata %s", err)
-	}
-	metadata := []byte("Unknown: test code")
-	if cloud == cloud_metadata.AWS {
-		instanceInfo, err := cloud_metadata.GetAWSInstanceInfo()
-		if err != nil {
-			return "", errors.Wrapf(err, "Failed to read AWS instance info")
-		}
-		metadata, err = json.Marshal(instanceInfo)
-		if err != nil {
-			return "", errors.Wrapf(err, "Failed to serialize the metadata")
-		}
-	} else {
-		return "", errors.Wrapf(err, "Cloud %s not supported yet", cloud)
-	}
-	// sends the data to the server to keep for records
-	encrypted, err := aesgcm.Encrypt(metadata, keyId)
-	if err != nil {
-		return "", errors.Wrapf(err, "Failed to encrypt the message")
-	}
-
-	req := &protocol.HostAuthRequest{
-		RequestTime: ptypes.TimestampNow(),
-		AuthInfo:    encrypted,
-	}
-
-	resp, err := h.c.HostAuth(ctx, req)
-	if err != nil {
-		return "", errors.Wrapf(err, "Failed to send the authentication challenge")
-	}
-	h.uuid = resp.AuthResponse
-	return string(h.uuid), nil
-}
-
-// It's always in the future, so not giving the user start time option
-func (h *Host) RequestCerts(ctx context.Context, duration time.Duration) error {
-	if h.keysDir == "" {
-		return errors.New("keysDir isn't set, don't know where to read the public keys from")
-	}
-	if unix.Access(h.keysDir, unix.W_OK) != nil {
-		return fmt.Errorf("Directory %s isn't writable, aborting before requesting certs", h.keysDir)
-	}
-	files, err := listPubKeysInDir(h.keysDir)
-	if err != nil {
-		return errors.Wrapf(err, "Failed list keys in host")
-	}
-	log.Printf("Found %d public keys that need to be signed", len(files))
-	// 1. so that all the certs have same start time
-	// 2. the server doesn't reject this for being too far in past
-	// taking the number from Oauth2's implementation
-	validFrom := time.Now().Add(10 * time.Second)
-	validUntil := validFrom.Add(duration)
-	for _, f := range files {
-		contents, err := ioutil.ReadFile(f)
-		if err != nil {
-			return errors.Wrapf(err, "Failed to read %s", f)
-		}
-		_, _, _, _, err = ssh.ParseAuthorizedKey(contents)
-		if err != nil {
-			return errors.Wrapf(err, "%s doesn't look like a public key file", f)
-		}
-		protoValidFrom, err := ptypes.TimestampProto(validFrom)
-		if err != nil {
-			return errors.Wrapf(err, "can't make protobuf Timestamp for validFrom")
-		}
-		protoValidUntil, err := ptypes.TimestampProto(validUntil)
-		if err != nil {
-			return errors.Wrapf(err, "can't make protobuf Timestamp for validUntil")
-		}
-
-		certRequest := &protocol.HostCertRequest{
-			RequestTime: ptypes.TimestampNow(),
-			PublicKey:   contents,
-			ValidFrom:   protoValidFrom,
-			ValidUntil:  protoValidUntil,
-			Id:          h.uuid,
-			Hostnames:   h.hostnames,
-		}
-		resp, err := h.c.HostCert(ctx, certRequest)
-		if err != nil {
-			return errors.Wrapf(err, "Error when trying to get cert for %s", f)
-		}
-		certFileName := certPath(f)
-		log.Printf("Writing to %s", certFileName)
-		err = ioutil.WriteFile(certFileName, resp.HostCert, 0644)
-		if err != nil {
-			return errors.Wrapf(err, "Failed to write %s", certFileName)
-		}
-	}
-	return nil
-}
-
-func certPath(pubKeyPath string) string {
-	base := filepath.Base(pubKeyPath)
-	dir := filepath.Dir(pubKeyPath)
-	prefix := strings.Split(base, ".")[0]
-	return path.Join(dir, prefix+"-cert.pub")
-}
-
-type User struct {
-	c              protocol.CertClient
-	keysDir        string
-	username       string
-	remoteUsername string
-	principals     []string
-	token          *oauth2.Token
-}
-
-// Validate the Oauth2.0 token against the server
-// it needs to have been generated by the same clientID
-// and have valid expiry date, etc
-// Maybe use a nonce or something, but I can't think of
-// reasonable things to send here, so boolean so that
-// the backend doesn't get bad requests
-func (u *User) CheckAuthorization(ctx context.Context) (bool, string, error) {
-	if u.token == nil {
-		return false, "", errors.New("Token isn't set, authenticate first with an OAuth2.0 service")
-	}
-	pbToken, err := accord.OAuthTokenPb(u.token)
-	if err != nil {
-		return false, "", errors.Wrapf(err, "Failed to convert *oauth2.Token to protobuf equivalent")
-	}
-	authRequest := &protocol.UserAuthRequest{
-		RequestTime: ptypes.TimestampNow(),
-		Username:    u.username,
-		Token:       pbToken,
-	}
-	resp, err := u.c.UserAuth(ctx, authRequest)
-	if err != nil {
-		return false, "", errors.Wrapf(err, "Failed to authenticate user with server")
-	}
-	return resp.GetValid(), resp.GetUserId(), nil
-}
-
-func (u *User) RequestCerts(ctx context.Context, userId string, duration time.Duration) error {
-	if len(u.principals) == 0 {
-		return errors.New("No principals provided to request certificates for")
-	}
-
-	if u.keysDir == "" {
-		return errors.New("keysDir isn't set, don't know where to read the public keys from")
-	}
-	if unix.Access(u.keysDir, unix.W_OK) != nil {
-		return fmt.Errorf("Directory %s isn't writable, aborting before requesting certs", u.keysDir)
-	}
-	files, err := listPubKeysInDir(u.keysDir)
-	if err != nil {
-		return errors.Wrapf(err, "Failed list keys in host")
-	}
-	log.Printf("Found %d public keys that need to be signed", len(files))
-	// 1. so that all the certs have same start time
-	// 2. the server doesn't reject this for being too far in past
-	// taking the number from Oauth2's implementation
-	validFrom := time.Now().Add(10 * time.Second)
-	validUntil := validFrom.Add(duration)
-	for _, f := range files {
-		contents, err := ioutil.ReadFile(f)
-		if err != nil {
-			return errors.Wrapf(err, "Failed to read %s", f)
-		}
-		_, _, _, _, err = ssh.ParseAuthorizedKey(contents)
-		if err != nil {
-			return errors.Wrapf(err, "%s doesn't look like a public key file", f)
-		}
-		protoValidFrom, err := ptypes.TimestampProto(validFrom)
-		if err != nil {
-			return errors.Wrapf(err, "can't make protobuf Timestamp for validFrom")
-		}
-		protoValidUntil, err := ptypes.TimestampProto(validUntil)
-		if err != nil {
-			return errors.Wrapf(err, "can't make protobuf Timestamp for validUntil")
-		}
-
-		var currentCert []byte
-		certFileName := certPath(f)
-		if _, err := os.Stat(certFileName); err != nil {
-			// we should just create the file if it doesn't exist
-			if !os.IsNotExist(err) {
-				return errors.Wrapf(err, "Unknown error reading cert file %s")
-			}
-		} else {
-			currentCert, err = ioutil.ReadFile(certFileName)
-			if err != nil {
-				return errors.Wrapf(err, "Found cert file %s but can't read")
-			}
-		}
-
-		certRequest := &protocol.UserCertRequest{
-			RequestTime:          ptypes.TimestampNow(),
-			UserId:               userId,
-			Username:             u.username,
-			RemoteUsername:       u.remoteUsername,
-			CurrentUserCert:      currentCert,
-			PublicKey:            contents,
-			ValidFrom:            protoValidFrom,
-			ValidUntil:           protoValidUntil,
-			AuthorizedPrincipals: u.principals,
-		}
-		resp, err := u.c.UserCert(ctx, certRequest)
-		if err != nil {
-			return errors.Wrapf(err, "Error when trying to get cert for %s", f)
-		}
-
-		log.Printf("Writing to %s", certFileName)
-		err = ioutil.WriteFile(certFileName, resp.UserCert, 0644)
-		if err != nil {
-			return errors.Wrapf(err, "Failed to write %s", certFileName)
-		}
-	}
-	return nil
-}
-
-// Returns full path for all the public keys in the directory given
-func listPubKeysInDir(dir string) ([]string, error) {
-	fileInfos, err := ioutil.ReadDir(dir)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Failed to enumerate files from %s", dir)
-	}
-	files := []string{}
-	for _, fileInfo := range fileInfos {
-		if strings.HasSuffix(fileInfo.Name(), ".pub") && !strings.Contains(fileInfo.Name(), "cert") {
-			files = append(files, path.Join(dir, fileInfo.Name()))
-		}
-	}
-	return files, nil
-}
-
-func deleteEmpty(s []string) []string {
-	var r []string
-	for _, str := range s {
-		if str != "" {
-			r = append(r, str)
-		}
-	}
-	return r
-}
-
-func updateUsersCertAuthority(filePath string, trustedUserCAs [][]byte) error {
-	f, err := os.Create(filePath)
-	if err != nil {
-		return errors.Wrapf(err, "failed to create file %s", filePath)
-	}
-	defer f.Close()
-	for _, b := range trustedUserCAs {
-		f.Write(b)
-	}
-	return nil
-}
-
-func updateKnownHostsCertAuthority(filePath string, trustedHostCAs [][]byte) error {
-	input, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		return errors.Wrapf(err, "Failed to read %s", filePath)
-	}
-
-	re := regexp.MustCompile(`(?ms:^#accord-trusted-hosts-start(.*)#accord-trusted-hosts-end)`)
-	newlines := strings.Split(re.ReplaceAllString(string(input), ""), "\n")
-	// the last synt
-	newlines = deleteEmpty(newlines)
-	newlines = append(newlines, "#accord-trusted-hosts-start")
-	for _, b := range trustedHostCAs {
-
-		if b[len(b)-1] == '\n' {
-			newlines = append(newlines, "@cert-authority * "+string(b[:len(b)-1]))
-		} else {
-			newlines = append(newlines, "@cert-authority * "+string(b))
-		}
-
-	}
-	newlines = append(newlines, "#accord-trusted-hosts-end", "\n")
-	backupFile := filePath + ".bak"
-	log.Println("Copied old file to " + backupFile)
-	err = os.Rename(filePath, backupFile)
-	if err != nil {
-		return errors.Wrapf(err, "Failed to rename file to %s", backupFile)
-	}
-	err = ioutil.WriteFile(filePath, []byte(strings.Join(newlines, "\n")), 0644)
-	if err != nil {
-		return errors.Wrapf(err, "Failed to write to %s", filePath)
-	}
-	return nil
 }
 
 func main() {
@@ -458,14 +142,14 @@ func main() {
 		}
 		c := protocol.NewCertClient(conn)
 		log.Println("Starting authentication for host")
-		host := &Host{
-			c:            c,
-			dryrun:       *dryrun,
-			pskStore:     pskStore,
-			salt:         *hostSalt,
-			deploymentId: *deploymentId,
-			keysDir:      *hostKeysPath,
-			hostnames:    hostnames,
+		host := &client.Host{
+			Client:       c,
+			Dryrun:       *dryrun,
+			PSKStore:     pskStore,
+			Salt:         *hostSalt,
+			DeploymentId: *deploymentId,
+			KeysDir:      *hostKeysPath,
+			Hostnames:    hostnames,
 		}
 
 		uuid, err := host.Authenticate(context.Background())
@@ -525,16 +209,13 @@ func main() {
 			log.Printf("remoteusername is empty, picking the same as current username: %s", usr.Username)
 			remoteUsername = &usr.Username
 		}
-
-		//log.Printf("token: %v", tok)
-		user := &User{
-			c:              c,
-			username:       usr.Username,
-			remoteUsername: *remoteUsername,
-			keysDir:        keysDir,
-			token:          tok,
-			principals:     principals.Value(),
-		}
+		// I don't like the pattern a lot, but I'm not sure the gain is for making a builder pattern
+		// TODO: think more about this
+		user := client.NewUserWithToken(c, tok)
+		user.SetUsername(usr.Username)
+		user.SetRemoteUsername(*remoteUsername)
+		user.SetKeysDir(keysDir)
+		user.SetPrincipals(principals.Value())
 		ok, email, err := user.CheckAuthorization(context.Background())
 		if err != nil {
 			log.Fatalf("Failed to check authorization for the user: %s", err)
@@ -570,17 +251,6 @@ func main() {
 		close(done)
 	case "updatehostcerts":
 		c := protocol.NewCertClient(conn)
-		resp, err := c.PublicTrustedCA(context.Background(), &protocol.PublicTrustedCARequest{
-			RequestTime: ptypes.TimestampNow(),
-		})
-		if err != nil {
-			log.Fatalf("Failed to get the certs %s", err)
-		}
-		hostCerts := [][]byte{}
-		//fmt.Println("=== Host CAs ===")
-		for _, hostCA := range resp.HostCAs {
-			hostCerts = append(hostCerts, hostCA.PublicKey)
-		}
 		if *knownHostsFile == "" {
 			usr, err := user.Current()
 			if err != nil {
@@ -590,28 +260,27 @@ func main() {
 			log.Printf("No knownhosts file given, using default: %s", defaultPath)
 			knownHostsFile = &defaultPath
 		}
-		updateKnownHostsCertAuthority(*knownHostsFile, hostCerts)
+		user := client.NewUser(c)
+		err := user.UpdateHostCertAuthority(*knownHostsFile)
+		if err != nil {
+			log.Fatalf("Failed to update known hosts file %s. %s", *knownHostsFile, err)
+		}
+
 		close(done)
 		//fmt.Printf("Resp: %#v\n", resp)
 	case "updateusercerts":
 		c := protocol.NewCertClient(conn)
-		resp, err := c.PublicTrustedCA(context.Background(), &protocol.PublicTrustedCARequest{
-			RequestTime: ptypes.TimestampNow(),
-		})
-		if err != nil {
-			log.Fatalf("Failed to get the certs %s", err)
-		}
-		userCerts := [][]byte{}
-		//fmt.Println("=== Host CAs ===")
-		for _, userCA := range resp.UserCAs {
-			userCerts = append(userCerts, userCA.PublicKey)
-		}
+
 		if *userCACertsFile == "" {
 			defaultPath := "/etc/ssh/users_ca.pub"
 			log.Printf("No usersCA file given, using default: %s", defaultPath)
 			userCACertsFile = &defaultPath
 		}
-		updateUsersCertAuthority(*userCACertsFile, userCerts)
+		host := client.NewHost(c)
+		err := host.UpdateUserCertAuthority(*userCACertsFile)
+		if err != nil {
+			log.Fatalf("Failed to update trusted users ca file: %s. %s", *userCACertsFile, err)
+		}
 		close(done)
 
 	case "updatesshd":
