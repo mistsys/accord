@@ -777,7 +777,7 @@ func (c *MockedSSMAPI) GetParameters(i *ssm.GetParametersInput) (*ssm.GetParamet
 		for _, n := range i.Names {
 			param, ok := c.mSecureStrings[*n]
 			if !ok {
-				return nil, fmt.Errorf("No parameter %s", n)
+				return nil, fmt.Errorf("No parameter %s", *n)
 			}
 			params = append(params, param)
 		}
@@ -785,7 +785,7 @@ func (c *MockedSSMAPI) GetParameters(i *ssm.GetParametersInput) (*ssm.GetParamet
 		for _, n := range i.Names {
 			param, ok := c.mSecureStrings[*n]
 			if !ok {
-				return nil, fmt.Errorf("No parameter %s", n)
+				return nil, fmt.Errorf("No parameter %s", *n)
 			}
 			params = append(params, param)
 		}

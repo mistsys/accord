@@ -27,13 +27,13 @@ func (g GrantAll) Authorized(user string, principals []string) ([]string, error)
 }
 
 type SimpleAuth struct {
-	Principals []string `json:"principals",yaml:"principals"`
+	Principals []string `json:"principals" yaml:"principals"`
 	// these users can get the root-everywhere if they request for it
 	// allowing to sign in with full sudo
-	AdminUsers []string `json:"admin_users",yaml:"admin_users"`
+	AdminUsers []string `json:"admin_users" yaml:"admin_users"`
 
 	// Users -> Principals map
-	AccessMap map[string][]string `json:"access_map",yaml:"access_map"`
+	AccessMap map[string][]string `json:"access_map" yaml:"access_map"`
 }
 
 func NewSimpleAuthFromFile(filePath string) (*SimpleAuth, error) {

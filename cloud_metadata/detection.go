@@ -37,7 +37,7 @@ func urlAlive(url string, headers map[string]string) (bool, error) {
 	if resp.StatusCode == 200 {
 		return true, nil
 	}
-	return false, fmt.Errorf("URL reachable but invalid code: %s", resp.StatusCode)
+	return false, fmt.Errorf("URL reachable but invalid code: %d", resp.StatusCode)
 }
 
 // Do some checks to return the name of cloud env or error
