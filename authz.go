@@ -37,15 +37,18 @@ type SimpleAuth struct {
 }
 
 func NewSimpleAuthFromFile(filePath string) (*SimpleAuth, error) {
-	s := &SimpleAuth{}
-
 	content, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Cannot read file %s", filePath)
 	}
-	err = json.Unmarshal(content, s)
+	return NewSimpleAuthFromBuffer(content)
+}
+
+func NewSimpleAuthFromBuffer(content []byte) (*SimpleAuth, error) {
+	s := &SimpleAuth{}
+	err := json.Unmarshal(content, s)
 	if err != nil {
-		return nil, errors.Wrapf(err, "Failed to parse %s", filePath)
+		return nil, errors.Wrapf(err, "Failed to parse json for simple auth")
 	}
 	return s, nil
 }
@@ -87,8 +90,7 @@ func (s SimpleAuth) Authorized(user string, principals []string) ([]string, erro
 
 	if s.IsAdmin(user) {
 		// if admin, grant the principals if they exist
-		// allow the user access to their own directory if they have one on the server
-		return append(principals, user), nil
+		return principals, nil
 	}
 
 	grantedAccess, ok := s.AccessMap[user]

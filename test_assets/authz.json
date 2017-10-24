@@ -1,0 +1,8 @@
+{
+    "principals": ["root-everywhere", "zones-db"],
+    "admin_users": ["user1@ex.ample.com"],
+    "access_map": {
+        "user1@ex.ample.com": ["root-everywhere"],
+        "user2@ex.ample.com": ["zones-db"]
+    }
+}

@@ -27,12 +27,13 @@ var (
 )
 
 /*
+MarshalCert marshals root ssh certs in openssh's line format.
+ssh.PublicKey interface already does Marshalling to text for public keys.
 I wrote this to understand what was going on when a SSH certificate is generated, managed
 This is left here as an example and possibly as a future user of the underlying API
 This tool is quite sufficient if you like the idea of running your own pure Go SSH CA service
 or need to wrap it into another tool or language that does the same thing
 */
-
 func MarshalCert(cert *ssh.Certificate, comment string) []byte {
 	b := &bytes.Buffer{}
 	b.WriteString(cert.Type())
@@ -46,24 +47,27 @@ func MarshalCert(cert *ssh.Certificate, comment string) []byte {
 	return b.Bytes()
 }
 
-// ssh one-line format (for lack of a better term) consists of three text fields: { key_type, data, comment }
-// data is base64 encoded binary which consists of tuples of length (4 bytes) and data of the length described previously.
-// For RSA keys, there should be three tuples which should be:  { key_type, public_exponent, modulus }
+/*
+EncodeRSAPublicKey formats the rsa.PublicKey format that can be parsed by ssh package.
+ssh one-line format (for lack of a better term) consists of three text fields: { key_type, data, comment }
+data is base64 encoded binary which consists of tuples of length (4 bytes) and data of the length described previously.
+For RSA keys, there should be three tuples which should be:  { key_type, public_exponent, modulus }
+*/
 func EncodeRSAPublicKey(key interface{}, comment string) (string, error) {
 	if rsaKey, ok := key.(rsa.PublicKey); ok {
-		key_type := "ssh-rsa"
+		keyType := "ssh-rsa"
 
-		modulus_bytes := rsaKey.N.Bytes()
+		modulusBytes := rsaKey.N.Bytes()
 
 		buf := new(bytes.Buffer)
 
 		var data = []interface{}{
-			uint32(len(key_type)),
-			[]byte(key_type),
+			uint32(len(keyType)),
+			[]byte(keyType),
 			uint32(binary.Size(uint32(rsaKey.E))),
 			uint32(rsaKey.E),
-			uint32(binary.Size(modulus_bytes)),
-			modulus_bytes,
+			uint32(binary.Size(modulusBytes)),
+			modulusBytes,
 		}
 
 		for _, v := range data {
@@ -73,10 +77,10 @@ func EncodeRSAPublicKey(key interface{}, comment string) (string, error) {
 			}
 		}
 
-		return fmt.Sprintf("%s %s %s", key_type, base64.StdEncoding.EncodeToString(buf.Bytes()), comment), nil
+		return fmt.Sprintf("%s %s %s", keyType, base64.StdEncoding.EncodeToString(buf.Bytes()), comment), nil
 	}
 
-	return "", fmt.Errorf("Unknown key type: %T\n", key)
+	return "", fmt.Errorf("unknown key type: %T", key)
 }
 
 func main() {
@@ -178,10 +182,10 @@ func main() {
 			log.Fatalf("Failed to generate RSA key. %s", err)
 		}
 
-		privkey_bytes := x509.MarshalPKCS1PrivateKey(privkey)
+		privKeyBytes := x509.MarshalPKCS1PrivateKey(privkey)
 		block := &pem.Block{
 			Type:  "RSA PRIVATE KEY",
-			Bytes: privkey_bytes,
+			Bytes: privKeyBytes,
 		}
 
 		if *password != "" {
@@ -197,20 +201,20 @@ func main() {
 			log.Fatalf("encode private key failed")
 		}
 		// parse DER format to a native type
-		key, err := x509.ParsePKCS1PrivateKey(privkey_bytes)
+		key, err := x509.ParsePKCS1PrivateKey(privKeyBytes)
 		if err != nil {
 			log.Fatal("Failed to parse PKCS1 Private Key")
 		}
 
 		// encode the public key portion of the native key into ssh-rsa format
 		// second parameter is the optional "comment" at the end of the string (usually 'user@host')
-		ssh_rsa, err := EncodeRSAPublicKey(key.PublicKey, fmt.Sprintf("Cert valid from %s to %s", curTime.Format("2006-01-02"), ninetyDaysLater.Format("2006-01-02")))
+		sshRSA, err := EncodeRSAPublicKey(key.PublicKey, fmt.Sprintf("Cert valid from %s to %s", curTime.Format("2006-01-02"), ninetyDaysLater.Format("2006-01-02")))
 		if err != nil {
 			log.Fatal("Failed to encode RSA Public Key")
 		}
 
 		fmt.Println("==== PUBLIC KEY ====")
-		fmt.Fprintf(wPubKey, ssh_rsa)
+		fmt.Fprintf(wPubKey, sshRSA)
 
 		//fmt.Printf(string(MarshalCert(cert, comment)))
 		//fmt.Println("Public Key")
@@ -281,7 +285,7 @@ func main() {
 		}
 		cert, ok := key.(*ssh.Certificate)
 		if !ok {
-			log.Fatalf("got %v (%T), wanted a certificate")
+			log.Fatalf("got %v (%T), wanted a certificate", cert, cert)
 		}
 		fmt.Printf("%#v\n", cert)
 		//fmt.Printf("Signature: %#v\n", cert.Signature)
@@ -303,16 +307,16 @@ func main() {
 				log.Fatalf("Unable to unmarshal contents from %s. %s", *psksFile, err)
 			}
 		}
-		deploymentId, err := id.KeyID(args[0], *hostSalt)
+		deploymentID, err := id.KeyID(args[0], *hostSalt)
 		if err != nil {
 			log.Fatalf("Failed to generate keyID %s", err)
 		}
-		if val, ok := psks[deploymentId]; ok {
+		if val, ok := psks[deploymentID]; ok {
 			fmt.Printf("PSK=%s\n", val)
-			log.Fatalf("psk for deployment %s=%d has already been generated", args[0], deploymentId)
+			log.Fatalf("psk for deployment %s=%d has already been generated", args[0], deploymentID)
 		}
 		key := accord.GenerateKey()
-		psks[deploymentId] = key
+		psks[deploymentID] = key
 		fmt.Println(string(key))
 
 		content, err := json.Marshal(psks)

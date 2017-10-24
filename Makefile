@@ -10,6 +10,7 @@ TOP ?= .
 DEPLOYMENT_VAULT ?= depvault
 COVERAGE_DIR = _coverage
 coveragesubdirs =$(sort $(shell find . \( -path ./git -o -path ./vendor \) -prune -o -name '*.go' -a -printf '%h\n' | sed 's/^.\///g' | xargs))
+RACE ?= "-race"
 
 install:
 	$(go) install $(set_vars) ./...
@@ -27,7 +28,8 @@ build-linux: _builds
 
 # clean
 clean :
-	-$(go) clean -i ./...
+	$(go) clean -i ./...
+	rm $(COVERAGE_DIR)/* || true
 
 
 test:
@@ -52,14 +54,16 @@ $(COVERAGE_DIR):
 
 
 ${COVERAGE_DIR}/coverage.txt:
-	echo "mode: set" > ${COVERAGE_DIR}/coverage.txt
+	echo "mode: atomic" > ${COVERAGE_DIR}/coverage.txt
 	-@for dir in $(shell $(go) list ./... | grep -v vendor |grep -v _vendor| grep -v vendor); do\
-		$(go) test -race -coverprofile=${COVERAGE_DIR}/profile.out -covermode=set $$dir;\
+		$(go) test $(RACE) -coverprofile=${COVERAGE_DIR}/profile.out -covermode=atomic $$dir;\
 		test ${COVERAGE_DIR}/$(dir).out && (cat ${COVERAGE_DIR}/profile.out | grep -v 'mode:' >> ${COVERAGE_DIR}/coverage.txt && rm ${COVERAGE_DIR}/profile.out)\
 	done
 
 test-coverage: $(COVERAGE_DIR) $(COVERAGE_DIR)/coverage.txt
 
+refresh-coverage: clean test-coverage
+	$(go) tool cover -html=$(COVERAGE_DIR)/coverage.txt -o $(COVERAGE_DIR)/coverage.html
 
 all: install
 
