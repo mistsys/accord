@@ -54,7 +54,7 @@ func makeUUID() []byte {
 func (s *AccordServer) HostAuth(ctx context.Context, authRequest *protocol.HostAuthRequest) (*protocol.HostAuthResponse, error) {
 	log.Println("Received host auth request")
 
-	decrypted, err := s.aesgcm.Decrypt(authRequest.AuthInfo)
+	decrypted, nonce, sender, err := s.aesgcm.Decrypt(authRequest.AuthInfo)
 	if err != nil {
 		// maybe wait until the deadline in Context and respond?
 		// to handle for timing based attacks
@@ -62,9 +62,18 @@ func (s *AccordServer) HostAuth(ctx context.Context, authRequest *protocol.HostA
 	}
 	log.Printf("Decrypted message from host %s", string(decrypted))
 
+	uuid := makeUUID()
+	// we have already established the server connection, no need for a new ID
+	// additionally we can have a well known server key known by every client
+	// but I don't see a lot of gain there
+	// this will be going over an already-encrypted connection too
+	encrypted, err := s.aesgcm.EncryptWithNonce(uuid, nonce, sender)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Failed to encrypt with the nonce from client")
+	}
 	return &protocol.HostAuthResponse{
 		Metadata:     replyMetadata(authRequest.GetRequestTime()),
-		AuthResponse: makeUUID(),
+		AuthResponse: encrypted,
 	}, nil
 }
 

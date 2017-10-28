@@ -44,7 +44,7 @@ func TestAESGCMEndToEnd(t *testing.T) {
 	// Now lets try decrypting the same message and see if
 	// we get the same message back
 
-	decrypted, err := aesgcm.Decrypt(encrypted)
+	decrypted, _, _, err := aesgcm.Decrypt(encrypted)
 	if err != nil {
 		t.Errorf("Failed to decrypt. %s", err)
 	}

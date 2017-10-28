@@ -141,6 +141,9 @@ func main() {
 			KeysDir:      *hostKeysPath,
 			Hostnames:    hostnames,
 		}
+		if *insecure {
+			host.Dryrun = true
+		}
 
 		uuid, err := host.Authenticate(context.Background())
 		if err != nil {

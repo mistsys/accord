@@ -5,9 +5,10 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/binary"
-	"errors"
 	"io"
 	"log"
+
+	"github.com/pkg/errors"
 )
 
 const (
@@ -22,7 +23,7 @@ var (
 )
 
 // GenerateNonce creates a new random nonce.
-func generateNonce(size int) ([]byte, error) {
+func GenerateNonce(size int) ([]byte, error) {
 	nonce := make([]byte, size)
 	_, err := io.ReadFull(rand.Reader, nonce[:])
 	if err != nil {
@@ -34,7 +35,7 @@ func generateNonce(size int) ([]byte, error) {
 
 // len(encodeURL) == 64. This allows (x <= 265) x % 64 to have an even
 // distribution.
-const encodeURL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+const urlEncodeable = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
 // A helper function create and fill a slice of length n with characters from
 // a-zA-Z0-9_-. It panics if there are any problems getting random bytes.
@@ -56,10 +57,10 @@ func RandAsciiBytes(n int) []byte {
 		random := uint8(randomness[pos])
 
 		// random % 64
-		randomPos := random % uint8(len(encodeURL))
+		randomPos := random % uint8(len(urlEncodeable))
 
 		// put into output
-		output[pos] = encodeURL[randomPos]
+		output[pos] = urlEncodeable[randomPos]
 	}
 
 	return output
@@ -83,7 +84,7 @@ func InitAESGCM(store PSKStore) *AESGCM {
 	}
 }
 
-func (a *AESGCM) Encrypt(message []byte, sender uint32) ([]byte, error) {
+func (a *AESGCM) EncryptWithNonce(message []byte, nonce []byte, sender uint32) ([]byte, error) {
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, sender)
 
@@ -105,38 +106,43 @@ func (a *AESGCM) Encrypt(message []byte, sender uint32) ([]byte, error) {
 		return nil, ErrEncrypt
 	}
 
-	nonce, err := generateNonce(NonceSize)
-	if err != nil {
-		return nil, ErrEncrypt
-	}
-
 	//log.Printf("Nonce: %d %q", len(nonce), nonce)
 	buf = append(buf, nonce...)
 	newBuf := gcm.Seal(buf, nonce, message, buf[:4])
 	return newBuf, nil
 }
 
-func (a *AESGCM) Decrypt(message []byte) ([]byte, error) {
+func (a *AESGCM) Encrypt(message []byte, sender uint32) ([]byte, error) {
+	nonce, err := GenerateNonce(NonceSize)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Failed to generate Nonce")
+	}
+	return a.EncryptWithNonce(message, nonce, sender)
+}
+
+// Decrypt returns plaintext, nonce, senderid, error
+func (a *AESGCM) Decrypt(message []byte) ([]byte, []byte, uint32, error) {
 	if len(message) <= NonceSize+4 {
 		log.Println("message < noncesize + 4")
-		return nil, ErrDecrypt
+		return nil, nil, 0, ErrDecrypt
 	}
 	buf := message[:4]
+	sender := binary.BigEndian.Uint32(buf)
 	psk, err := a.store.GetPSK(message[:4])
 	if err != nil {
 		log.Printf("Err: failed to find the PSK for id: %q. %s", buf, err)
-		return nil, ErrKeyNotFound
+		return nil, nil, sender, ErrKeyNotFound
 	}
 	c, err := aes.NewCipher(psk)
 	if err != nil {
 		log.Printf("failed at cipher. %s", err)
-		return nil, ErrDecrypt
+		return nil, nil, sender, ErrDecrypt
 	}
 
 	gcm, err := cipher.NewGCM(c)
 	if err != nil {
 		log.Printf("failed at gcm. %s", err)
-		return nil, ErrDecrypt
+		return nil, nil, sender, ErrDecrypt
 	}
 
 	nonce := make([]byte, NonceSize)
@@ -146,8 +152,8 @@ func (a *AESGCM) Decrypt(message []byte) ([]byte, error) {
 	out, err := gcm.Open(nil, nonce, message[4+NonceSize:], message[:4])
 	if err != nil {
 		log.Printf("failed at open. %s", err)
-		return nil, ErrDecrypt
+		return nil, nil, sender, ErrDecrypt
 	}
 
-	return out, nil
+	return out, nonce, sender, nil
 }

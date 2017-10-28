@@ -35,6 +35,12 @@ clean :
 test:
 	$(go) test ./...
 
+dev-server-insecure:
+	$(go) run $(TOP)/cmd/accord_server/server.go -rootca $(TOP)/test_assets/root_ca_20170927 -rootcapassword="staple horse apple newton" -userca $(TOP)/test_assets/user_ca_20170927 -usercapassword "staple horse apple thatcher" -insecure
+
+dev-client-insecure-hostauth:
+	$(go) run $(TOP)/cmd/accord_client/client.go -task=hostcert -insecure -deploymentId=test -psk=JpUtbRukLuIFyjeKpA4fIpjgs6MTV8eH -hostkeys=$(TOP)/test_assets/test_pubkeys/
+
 add-deployment:
 	$(go) run $(TOP)/cmd/accord/accord.go -task add-deployment -path.psk $(TOP)/terraform/playbooks/files/deployments.json $(DEPLOYMENT_ID)
 

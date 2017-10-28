@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -48,7 +49,7 @@ func (h *Host) Authenticate(ctx context.Context) (string, error) {
 	aesgcm := accord.InitAESGCM(h.PSKStore)
 
 	cloud, err := cloud_metadata.CloudService()
-	if err != nil {
+	if err != nil && !h.Dryrun {
 		log.Printf("Failed to read metadata %s", err)
 	}
 	metadata := []byte("Unknown: test code")
@@ -62,10 +63,17 @@ func (h *Host) Authenticate(ctx context.Context) (string, error) {
 			return "", errors.Wrapf(err, "Failed to serialize the metadata")
 		}
 	} else {
-		return "", errors.Wrapf(err, "Cloud %s not supported yet", cloud)
+		if !h.Dryrun {
+			return "", errors.Wrapf(err, "Cloud %s not supported yet", cloud)
+		}
+	}
+
+	nonce, err := accord.GenerateNonce(accord.NonceSize)
+	if err != nil {
+		return "", errors.Wrapf(err, "Failed to generate nonce")
 	}
 	// sends the data to the server to keep for records
-	encrypted, err := aesgcm.Encrypt(metadata, keyId)
+	encrypted, err := aesgcm.EncryptWithNonce(metadata, nonce, keyId)
 	if err != nil {
 		return "", errors.Wrapf(err, "Failed to encrypt the message")
 	}
@@ -79,7 +87,18 @@ func (h *Host) Authenticate(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", errors.Wrapf(err, "Failed to send the authentication challenge")
 	}
-	h.UUID = resp.AuthResponse
+
+	uuid, nonce2, id2, err := aesgcm.Decrypt(resp.AuthResponse)
+	if !bytes.Equal(nonce, nonce2) {
+		return "", errors.Wrapf(err, "Server didn't use the same nonce to encrypt the message, something's wrong")
+	}
+
+	if id2 != keyId {
+		return "", errors.Wrapf(err, "Ids don't match")
+	}
+
+	h.UUID = uuid
+
 	return string(h.UUID), nil
 }
 

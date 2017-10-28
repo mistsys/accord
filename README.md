@@ -164,10 +164,8 @@ test_assets/test_pubkeys/ssh_host_rsa_key-cert.pub:
 
 ### Users requesting their SSH certificates
 
-
-
-
 This will print the cert files after getting them signed by the server.
+
 
 ## Similar Projects
 
@@ -181,4 +179,3 @@ This will print the cert files after getting them signed by the server.
 - https://code.facebook.com/posts/365787980419535/scalable-and-secure-access-with-ssh/
 - https://ef.gy/hardening-ssh
 - https://github.com/openssh/openssh-portable/blob/master/PROTOCOL.certkeys
-
