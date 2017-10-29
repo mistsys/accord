@@ -48,30 +48,13 @@ func (h *Host) Authenticate(ctx context.Context) (string, error) {
 	//log.Printf("keyId: %d", keyId)
 	aesgcm := accord.InitAESGCM(h.PSKStore)
 
-	cloud, err := cloud_metadata.CloudService()
-	if err != nil && !h.Dryrun {
-		log.Printf("Failed to read metadata %s", err)
-	}
-	metadata := []byte("Unknown: test code")
-	if cloud == cloud_metadata.AWS {
-		instanceInfo, err := cloud_metadata.GetAWSInstanceInfo()
-		if err != nil {
-			return "", errors.Wrapf(err, "Failed to read AWS instance info")
-		}
-		metadata, err = json.Marshal(instanceInfo)
-		if err != nil {
-			return "", errors.Wrapf(err, "Failed to serialize the metadata")
-		}
-	} else {
-		if !h.Dryrun {
-			return "", errors.Wrapf(err, "Cloud %s not supported yet", cloud)
-		}
-	}
-
 	nonce, err := accord.GenerateNonce(accord.NonceSize)
 	if err != nil {
 		return "", errors.Wrapf(err, "Failed to generate nonce")
 	}
+
+	metadata := []byte("Host Login")
+
 	// sends the data to the server to keep for records
 	encrypted, err := aesgcm.EncryptWithNonce(metadata, nonce, keyId)
 	if err != nil {
@@ -104,6 +87,27 @@ func (h *Host) Authenticate(ctx context.Context) (string, error) {
 
 // It's always in the future, so not giving the user start time option
 func (h *Host) RequestCerts(ctx context.Context, duration time.Duration) error {
+
+	cloud, err := cloud_metadata.CloudService()
+	if err != nil && !h.Dryrun {
+		log.Printf("Failed to read metadata %s", err)
+	}
+	metadata := []byte("Unknown: test code")
+	if cloud == cloud_metadata.AWS {
+		instanceInfo, err := cloud_metadata.GetAWSInstanceInfo()
+		if err != nil {
+			return errors.Wrapf(err, "Failed to read AWS instance info")
+		}
+		metadata, err = json.Marshal(instanceInfo)
+		if err != nil {
+			return errors.Wrapf(err, "Failed to serialize the metadata")
+		}
+	} else {
+		if !h.Dryrun {
+			return errors.Wrapf(err, "Cloud %s not supported yet", cloud)
+		}
+	}
+
 	if h.KeysDir == "" {
 		return errors.New("keysDir isn't set, don't know where to read the public keys from")
 	}
@@ -139,12 +143,13 @@ func (h *Host) RequestCerts(ctx context.Context, duration time.Duration) error {
 		}
 
 		certRequest := &protocol.HostCertRequest{
-			RequestTime: ptypes.TimestampNow(),
-			PublicKey:   contents,
-			ValidFrom:   protoValidFrom,
-			ValidUntil:  protoValidUntil,
-			Id:          h.UUID,
-			Hostnames:   h.Hostnames,
+			RequestTime:  ptypes.TimestampNow(),
+			PublicKey:    contents,
+			ValidFrom:    protoValidFrom,
+			ValidUntil:   protoValidUntil,
+			Id:           h.UUID,
+			Hostnames:    h.Hostnames,
+			HostMetadata: metadata,
 		}
 		resp, err := h.Client.HostCert(ctx, certRequest)
 		if err != nil {

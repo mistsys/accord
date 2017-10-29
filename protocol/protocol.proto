@@ -87,6 +87,8 @@ message HostCertRequest {
     // these need to be FQDN of all the IPs the host needs to have
     repeated string hostnames = 5;
     bytes publicKey = 6;
+    // Send the HostMetadata after the Authentication step
+    bytes hostMetadata = 7;
 }
     
     
