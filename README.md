@@ -15,6 +15,19 @@ Accord:
    - This means any kind of tampering for the keys are logged in CloudTrail's audit log
 
 
+This service already covers a lot of required work but there are still upcoming features that would make managing it easier, see issues and the TODOs for more details.
+
+## TODOs
+
+- [ ] Allow mechanism other than logs for auditing which user or server got the keys
+   - [ ] a Postgres server with JSON to store server details from multiple seources or something that's pluggable would be great
+   - [ ] enable a query endpoint for the backend
+- [ ] Support hosting on GCE and Azure. I don't know about them quite as well to do it justice. A client can run anywhere but the accord server needs to run in AWS.
+- [ ] Alerting and reporting
+- [ ] Enforce key size, rotation policies for users and servers
+- [ ] Allow querying for servers that are about to expire their certificates
+
+
 ## How to develop
 
 Get the latest grpc

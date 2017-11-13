@@ -65,6 +65,7 @@ func main() {
 	userCACertsFile := flag.String("userca", "", "Where the userca file should be, defaults to /etc/ssh/users_ca.pub")
 	webserverPort := flag.Int("webserver.port", 8091, "Which port to run the auth webserver on")
 	sshdFile := flag.String("sshdconfig", "", "SSHD Configuration file, defaults to /etc/ssh/sshd_config")
+	certDuration := flag.Duration("duration", 24*time.Hour, "Duration to request certificate for")
 	var (
 		hostnames  = stringSlice{}
 		principals = stringSlice{}
@@ -217,7 +218,7 @@ func main() {
 			log.Fatalf("Invalid state reached for user cert, cannot continue further")
 		}
 
-		err = user.RequestCerts(context.Background(), email, 24*time.Hour)
+		err = user.RequestCerts(context.Background(), email, *certDuration)
 		if err != nil {
 			log.Fatalf("Failed to get the certs %s", err)
 		}
