@@ -1,0 +1,33 @@
+@startuml
+
+title User Accord Lifecycle
+
+actor User as M
+participant "Client" as U
+participant "Google Auth" as G
+participant "Accord Server" as A
+
+U -> G: Login for domain
+G -> U: oauth2.Token
+U -> M: Save oauth2.Token
+
+U -> A: UserAuth(oauth2.Token)
+A -> G: Validate AccessKey from oauth2.Token
+activate A
+G -> A: TokenInfo (Server confirms email address)
+A -> U: UserAuthResponse
+
+== For all Public Keys ==
+U -> A: UserCert() with principals
+|||
+A -> U: Send Signed certificates
+U -> M: Save cert
+A -> U: HostCA
+U -> M: Save HostCA
+
+deactivate A
+||45||
+deactivate U
+
+@enduml
+

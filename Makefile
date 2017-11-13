@@ -55,6 +55,9 @@ release-client: build-osx build-linux
 integration-test:
 	./integration.sh
 
+gendocs: docs/*
+	plantuml -tpng $(TOP)/docs/*.plantuml
+
 $(COVERAGE_DIR):
 	mkdir -p $(COVERAGE_DIR)
 

@@ -1,0 +1,30 @@
+@startuml
+
+title Host Accord Lifecycle
+
+actor Host as D
+participant "New Host" as H
+participant "Accord Server" as A
+
+H -> A: HostAuth()
+activate A
+|||
+A -> H: Send Encrypted UUID
+activate H
+||45||
+H->D: Save UUID
+
+== For all Public Keys ==
+H -> A: HostCert() with instance metadata
+|||
+A -> H: Send Signed certificates
+H -> D: Save cert
+A -> H: UserCA
+H -> D: Save userCA
+
+deactivate A
+||45||
+deactivate H
+
+@enduml
+
