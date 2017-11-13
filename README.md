@@ -20,10 +20,11 @@ This service already covers a lot of required work but there are still upcoming 
 ## TODOs
 
 - [ ] Allow mechanism other than logs for auditing which user or server got the keys
-   - [ ] a Postgres server with JSON to store server details from multiple seources or something that's pluggable would be great
+   - [ ] a Postgres server with JSON to store server details from multiple sources or something that's pluggable would be great
    - [ ] enable a query endpoint for the backend
 - [ ] Support hosting on GCE and Azure. I don't know about them quite as well to do it justice. A client can run anywhere but the accord server needs to run in AWS.
-- [ ] Alerting and reporting
+- [ ] Reporting on who accessed
+- [ ] Run multiple instances by sharing the Let's Encrypt cert, if you're using it.
 - [ ] Enforce key size, rotation policies for users and servers
 - [ ] Allow querying for servers that are about to expire their certificates
 
