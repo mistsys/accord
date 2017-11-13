@@ -25,6 +25,8 @@ This service already covers a lot of required work but there are still upcoming 
 - [ ] Support hosting on GCE and Azure. I don't know about them quite as well to do it justice. A client can run anywhere but the accord server needs to run in AWS.
 - [ ] Reporting on who accessed
 - [ ] Run multiple instances by sharing the Let's Encrypt cert, if you're using it.
+- [ ] Alerting and reporting
+- [ ] Key Rotation and Validity buffer times, ie when you have a replacement set of keys to replace soon, how long before do you start signing with the new keys.
 - [ ] Enforce key size, rotation policies for users and servers
 - [ ] Allow querying for servers that are about to expire their certificates
 
