@@ -179,11 +179,22 @@ func main() {
 			// Since Lets Encrypt uses SNI anyway
 			// you need to run it on 443 regardless
 			log.Println("Getting certificate from Lets Encrypt")
-			addr = ":https"
-			tlsConfig, err = GetTLS(*hostname, *cacheDir, *contactEmail)
-			if err != nil {
-				log.Fatalf("Failed to get certificate for %s", *hostname)
+
+			// HACK: fix for SNI-01/02 methods being blocked, use HTTP-01
+			certMgr := autocert.Manager{
+				Prompt:     autocert.AcceptTOS,
+				Cache:      autocert.DirCache(*cacheDir),
+				HostPolicy: autocert.HostWhitelist(*hostname),
+				Email:      *contactEmail,
 			}
+			// this is workaround the HTTPSNI issue
+			httpServer := &http.Server{
+				Handler: certMgr.HTTPHandler(nil),
+				Addr:    ":80",
+			}
+			go httpServer.ListenAndServe()
+			addr = ":https"
+			tlsConfig = &tls.Config{GetCertificate: certMgr.GetCertificate}
 			creds = credentials.NewTLS(tlsConfig)
 		}
 

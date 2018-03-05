@@ -75,7 +75,7 @@ resource "aws_security_group" "office_ssh" {
 
 resource "aws_security_group" "cert_server" {
   name        = "cert_server"
-  description = "Only allow 443"
+  description = "Only allow 443 and 80"
 
   // TODO: once this is well tested all 443 traffic should go through ELB too
   ingress {
@@ -83,6 +83,13 @@ resource "aws_security_group" "cert_server" {
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    security_groups = ["${aws_security_group.cert_elb.id}"]
   }
 
   ingress {
@@ -111,6 +118,13 @@ resource "aws_security_group" "cert_elb" {
   ingress {
     from_port   = 443
     to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -198,6 +212,7 @@ resource "aws_iam_policy" "caserver_readkeys_policy" {
   path = "/"
   policy = "${data.aws_iam_policy_document.caserver_readkeys_policy.json}"
 }
+
 // If we want people to be able to read the role -- need to make explicit trust
 // to the user's ARN
 // TODO: remove the access for current user once testing is complete
@@ -360,6 +375,13 @@ resource "aws_elb" "cert_server_lb" {
     lb_protocol = "tcp"
   }
 
+  listener {
+    instance_port = 80
+    instance_protocol = "http"
+    lb_port = 80
+    lb_protocol = "http"
+  }
+
   security_groups = ["${aws_security_group.cert_elb.id}"]
 
   health_check {
@@ -388,8 +410,8 @@ resource "aws_route53_zone" "primary" {
   }
 }
 
-// this makes cartman.ca.mistsys.net
-resource "aws_route53_record" "cartman" {
+// this makes certserver.domain
+resource "aws_route53_record" "certserver" {
   zone_id = "${aws_route53_zone.primary.zone_id}"
   name    = "${var.ca_host}"
   type    = "A"
@@ -401,6 +423,7 @@ resource "aws_route53_record" "cartman" {
     evaluate_target_health = true
   }
 }
+
 
 
 output "caserver_ips" {
