@@ -33,6 +33,8 @@ HostCertificate /etc/ssh/ssh_host_ecdsa_key-cert.pub
 HostKey /etc/ssh/ssh_host_ed25519_key
 HostCertificate /etc/ssh/ssh_host_ed25519_key-cert.pub
 
+RevokedKeys /etc/ssh/revoked_keys
+
 # Ciphers and keying
 #RekeyLimit default none
 
