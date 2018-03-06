@@ -48,6 +48,8 @@
     - name: Apply permissions to acquire service ports
       command: /sbin/setcap "cap_net_bind_service=ep" /srv/accord-{{ day }}/bin/accord
       register: accord
+    - name: Call http://localhost:80/.well-known/acme-challenge for HTTP-01
+      command: /usr/bin/curl http://localhost:80/.well-known/acme-challenge
     - name: Copy deployments file
       copy:
         src: files/deployments.json
