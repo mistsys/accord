@@ -3,12 +3,12 @@ package status
 import (
 	"fmt"
 	"net/http"
-	"net/http/pprof"
 	"runtime"
 	"strconv"
 	"time"
 
 	"github.com/mistsys/mist_go_utils/cloud"
+	"github.com/mistsys/mist_go_utils/pprofutil"
 )
 
 var defaultHttpPort = 9110
@@ -56,12 +56,8 @@ func ServePort(port int) Mux {
 	addr := ":" + strconv.Itoa(port)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/about", HandleAbout)
-	// show pprof profiling in the default /debug/pprof/* location
-	mux.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
-	mux.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
-	mux.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
-	mux.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
-	mux.Handle("/debug/pprof/trace", http.HandlerFunc(pprof.Trace)) // note: if this breaks your build you need to upgrade to Go >= 1.5
+
+	pprofutil.InitMux(mux)
 
 	go func(addr string, mux http.Handler) {
 		err := http.ListenAndServe(addr, mux)
